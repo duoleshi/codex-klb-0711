@@ -63,6 +63,14 @@ const MINERU_API_TOKEN = process.env.MINERU_API_TOKEN || ""
 const MINERU_API_BASE = "https://mineru.net/api/v4"
 const MINERU_SIZE_LIMIT = 200 * 1024 * 1024 // 200MB
 
+// Pix2Text (P2T) API 配置
+const P2T_API_KEY = process.env.P2T_API_KEY || ""
+const P2T_API_BASE = "https://api.breezedeus.com"
+
+// TextIn xParse API 配置
+const TEXTIN_APP_ID = process.env.TEXTIN_APP_ID || ""
+const TEXTIN_SECRET_CODE = process.env.TEXTIN_SECRET_CODE || ""
+
 // Access Token 缓存
 let cachedAccessToken: string | null = null
 let tokenExpireTime: number = 0
@@ -150,7 +158,7 @@ async function extractTextWithPdfParse(buffer: Buffer): Promise<{
  * 使用百度 OCR 识别 PDF
  * 使用通用文字识别 API，支持 PDF 格式
  */
-async function recognizeWithBaiduOCR(buffer: Buffer): Promise<string> {
+export async function recognizeWithBaiduOCR(buffer: Buffer): Promise<string> {
   console.log(`[百度OCR] 开始识别 PDF...`)
 
   if (!BAIDU_OCR_API_KEY || !BAIDU_OCR_SECRET_KEY) {
@@ -254,7 +262,7 @@ async function recognizeWithStandardOCR(buffer: Buffer, accessToken: string): Pr
  * 使用 MinerU API 识别 PDF（推荐，支持 200MB 以内文件）
  * 流程：申请上传链接 → 上传文件 → 轮询结果 → 下载 Markdown
  */
-async function recognizeWithMinerU(
+export async function recognizeWithMinerU(
   buffer: Buffer,
   filename: string = "document.pdf",
   onProgress?: ProgressCallback
@@ -479,7 +487,7 @@ async function extractMarkdownFromZip(zipBuffer: Buffer): Promise<string> {
  * 使用 Tesseract.js 本地 OCR 识别 PDF
  * 将 PDF 转为图片后逐页识别
  */
-async function recognizeWithTesseract(buffer: Buffer): Promise<string> {
+export async function recognizeWithTesseract(buffer: Buffer): Promise<string> {
   console.log(`[Tesseract] 开始本地 OCR 识别...`)
   console.log(`[Tesseract] PDF 大小: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`)
 
@@ -550,6 +558,197 @@ async function recognizeWithTesseract(buffer: Buffer): Promise<string> {
     return fullText.trim()
   } catch (error) {
     console.error(`[Tesseract] 识别失败:`, error)
+    throw error
+  }
+}
+
+/**
+ * 使用 Pix2Text (P2T) Cloud API 识别 PDF/图片
+ * 流程：提交任务 → 获取 task_id → 轮询结果
+ * PDF 文件必须使用 server_type: 'ultra'
+ */
+export async function recognizeWithP2T(
+  buffer: Buffer,
+  filename: string = "document.pdf"
+): Promise<string> {
+  console.log(`[P2T] 开始识别...`)
+  console.log(`[P2T] 文件大小: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`)
+
+  if (!P2T_API_KEY) {
+    throw new Error("P2T API Key 未配置")
+  }
+
+  const isPDF = filename.toLowerCase().endsWith(".pdf")
+
+  try {
+    // 1. 提交识别任务
+    const formData = new FormData()
+    const blob = new Blob([buffer], { type: isPDF ? "application/pdf" : "image/png" })
+    formData.append("image", blob, filename)
+    formData.append("language", "zh")
+    formData.append("file_type", "text_formula")
+    formData.append("server_type", isPDF ? "ultra" : "pro")
+    formData.append("resized_shape", "608")
+
+    console.log(`[P2T] 提交任务 (server_type: ${isPDF ? "ultra" : "pro"})...`)
+
+    const submitRes = await fetch(`${P2T_API_BASE}/pix2text`, {
+      method: "POST",
+      headers: {
+        "X-API-Key": P2T_API_KEY,
+      },
+      body: formData,
+    })
+
+    if (!submitRes.ok) {
+      const errorText = await submitRes.text()
+      throw new Error(`P2T 提交失败: ${submitRes.status} - ${errorText}`)
+    }
+
+    const submitData = await submitRes.json()
+
+    if (submitData.code !== 200 && submitData.status !== "success") {
+      throw new Error(`P2T API 错误: ${submitData.message || submitData.msg || JSON.stringify(submitData)}`)
+    }
+
+    const taskId = submitData.data?.task_id || submitData.task_id
+    if (!taskId) {
+      throw new Error(`P2T 未返回 task_id: ${JSON.stringify(submitData)}`)
+    }
+
+    console.log(`[P2T] 任务提交成功，task_id: ${taskId}`)
+
+    // 如果同步返回了结果，直接使用
+    if (submitData.data?.result) {
+      const text = extractP2TResult(submitData.data.result)
+      if (text) {
+        console.log(`[P2T] 同步返回结果: ${text.length} 字符`)
+        return text
+      }
+    }
+
+    // 2. 轮询结果（最多等待 5 分钟，每 3 秒检查一次）
+    const maxRetries = 100
+    for (let i = 0; i < maxRetries; i++) {
+      await new Promise(resolve => setTimeout(resolve, 3000))
+
+      const pollRes = await fetch(`${P2T_API_BASE}/result/${taskId}`, {
+        headers: {
+          "X-API-Key": P2T_API_KEY,
+        },
+      })
+
+      if (!pollRes.ok) {
+        console.warn(`[P2T] 轮询失败: ${pollRes.status}`)
+        continue
+      }
+
+      const pollData = await pollRes.json()
+      const status = pollData.data?.status || pollData.status
+      console.log(`[P2T] 状态: ${status} (${i + 1}/${maxRetries})`)
+
+      if (status === "FINISHED" || status === "finished" || status === "done") {
+        const result = pollData.data?.result || pollData.result
+        const text = extractP2TResult(result)
+        console.log(`[P2T] 识别完成: ${text.length} 字符`)
+        return text
+      }
+
+      if (status === "FAILED" || status === "failed" || status === "error") {
+        throw new Error(`P2T 识别失败: ${pollData.data?.error || pollData.message || "未知错误"}`)
+      }
+
+      // PROGRESS 状态，继续轮询
+    }
+
+    throw new Error("P2T 识别超时（超过 5 分钟）")
+  } catch (error) {
+    console.error(`[P2T] 识别失败:`, error)
+    throw error
+  }
+}
+
+/**
+ * 从 P2T 返回结果中提取文本
+ */
+function extractP2TResult(result: any): string {
+  if (!result) return ""
+
+  // 如果结果是字符串
+  if (typeof result === "string") return result
+
+  // 如果结果是数组（每个元素是识别的文本块）
+  if (Array.isArray(result)) {
+    return result.map((item: any) => {
+      if (typeof item === "string") return item
+      if (item.text) return item.text
+      return ""
+    }).join("\n")
+  }
+
+  // 如果结果是对象
+  if (result.text) return result.text
+  if (result.markdown) return result.markdown
+  if (result.content) return result.content
+
+  return JSON.stringify(result)
+}
+
+/**
+ * 使用 TextIn xParse API 识别 PDF
+ * 同步调用，直接返回 Markdown
+ */
+export async function recognizeWithTextIn(
+  buffer: Buffer
+): Promise<string> {
+  console.log(`[TextIn] 开始识别 PDF...`)
+  console.log(`[TextIn] 文件大小: ${(buffer.length / 1024 / 1024).toFixed(2)} MB`)
+
+  if (!TEXTIN_APP_ID || !TEXTIN_SECRET_CODE) {
+    throw new Error("TextIn API 凭证未配置")
+  }
+
+  try {
+    const formData = new FormData()
+    const blob = new Blob([buffer], { type: "application/pdf" })
+    formData.append("file", blob, "document.pdf")
+    formData.append("parse_mode", "auto")
+    formData.append("table_flavor", "html")
+    formData.append("formula_level", "0")
+
+    console.log(`[TextIn] 提交识别请求...`)
+
+    const response = await fetch("https://api.textin.com/ai/service/v1/pdf_to_markdown", {
+      method: "POST",
+      headers: {
+        "x-ti-app-id": TEXTIN_APP_ID,
+        "x-ti-secret-code": TEXTIN_SECRET_CODE,
+      },
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`TextIn 请求失败: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+
+    if (data.code !== 200 && data.code !== 0) {
+      throw new Error(`TextIn API 错误: ${data.message || data.msg || JSON.stringify(data)}`)
+    }
+
+    const markdown = data.result?.markdown || data.result?.text || ""
+
+    if (!markdown.trim()) {
+      throw new Error("TextIn 返回结果为空")
+    }
+
+    console.log(`[TextIn] 识别完成: ${markdown.length} 字符`)
+
+    return markdown.trim()
+  } catch (error) {
+    console.error(`[TextIn] 识别失败:`, error)
     throw error
   }
 }

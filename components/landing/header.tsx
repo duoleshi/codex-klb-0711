@@ -13,6 +13,7 @@ const navLinks = [
   { label: "功能", href: "/#features" },
   { label: "常见问题", href: "/#faq" },
   { label: "法规库", href: "/regulations" },
+  { label: "测试", href: "/ocr-test" },
 ]
 
 export function Header() {
