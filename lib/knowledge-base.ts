@@ -6,6 +6,7 @@
 
 import fs from "fs"
 import path from "path"
+import { getClausesByFeatures, type MatchedClause, type SchemeFeatures } from "./clause-db"
 
 // 知识库文件夹路径 - 修改为审核依据文件夹
 const KNOWLEDGE_BASE_DIR = "方案审核依据"
@@ -365,6 +366,115 @@ export async function identifyProfessionTypes(documentContent: string): Promise<
   return result
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Step 2：Hook 1 · 预处理（identifySchemeFeatures，纯规则版）
+// 输出 SchemeFeatures，供 Hook 2（clause-db.getClausesByFeatures）精准捞条款
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 构造类型 → 高区分度关键词（用词组避免跨类型误命中：
+// 如轮扣式方案里会出现"扣件式剪刀撑"，必须用整词"扣件式钢管脚手架"才不误判）
+const STRUCTURE_TYPE_KEYWORDS: { type: string; keywords: string[] }[] = [
+  { type: "轮扣式", keywords: ["轮扣式", "轮扣钢管", "轮盘"] },
+  { type: "盘扣式", keywords: ["盘扣式", "承插型盘扣", "盘扣钢管"] },
+  { type: "扣件式", keywords: ["扣件式钢管脚手架", "扣件式脚手架", "扣件式钢管"] },
+  { type: "碗扣式", keywords: ["碗扣式", "碗扣"] },
+  { type: "套扣式", keywords: ["承插型套扣", "套扣式"] },
+  { type: "门式", keywords: ["门式钢管脚手架", "门式脚手架"] },
+]
+
+// 涉及材料词表（命中即收录）
+const MATERIAL_KEYWORDS = [
+  "钢管", "可调托座", "可调托撑", "顶托", "U型托", "可调底座", "底座",
+  "扫地杆", "立杆", "横杆", "剪刀撑", "扣件", "丝杆", "垫板",
+  "模板", "木胶合板", "竹胶板", "钢模板", "铝合金模板", "方木", "对拉螺栓",
+]
+
+// 关键工艺词表
+const PROCESS_KEYWORDS = [
+  "搭设", "拆除", "安装", "拆卸", "设计计算", "验算", "监测",
+  "检查", "验收", "吊装", "焊接", "混凝土浇筑",
+]
+
+// 构造类型 → 建议规范号（possibleStandards 辅助字段）
+const STRUCTURE_TYPE_STANDARDS: Record<string, string[]> = {
+  "轮扣式": ["DB44/T 1876-2016", "T/CCIAT 0003-2019", "JGJ 162-2008"],
+  "盘扣式": ["JGJ/T 231-2021", "JGJ 162-2008"],
+  "扣件式": ["JGJ 130-2011", "JGJ 162-2008"],
+  "碗扣式": ["JGJ 166-2016", "JGJ 162-2008"],
+  "套扣式": ["DBJ/T 15-98-2019"],
+  "门式": ["JGJ/T 128-2019"],
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function countKeywordHits(text: string, keywords: string[]): number {
+  let sum = 0
+  for (const k of keywords) {
+    const matches = text.match(new RegExp(escapeRegExp(k), "g"))
+    sum += matches ? matches.length : 0
+  }
+  return sum
+}
+
+function scanPresentKeywords(text: string, keywords: string[]): string[] {
+  return keywords.filter((k) => text.includes(k))
+}
+
+function identifyStructureType(text: string): string | null {
+  let best: { type: string; score: number } | null = null
+  for (const { type, keywords } of STRUCTURE_TYPE_KEYWORDS) {
+    const score = countKeywordHits(text, keywords)
+    if (score > 0 && (!best || score > best.score)) {
+      best = { type, score }
+    }
+  }
+  return best?.type ?? null
+}
+
+function identifyHazardLevel(text: string): string | null {
+  // 超规模（高大模板 = 超过一定规模的危大工程）
+  if (["高大模板", "高支模", "超过一定规模"].some((k) => text.includes(k))) return "超规模"
+  // 搭设高度 ≥8m
+  if (/搭设高度.{0,6}([8-9]|[1-9]\d)\s*m/.test(text)) return "超规模"
+  // 一般危大
+  if (["危大工程", "危险性较大", "专项施工方案"].some((k) => text.includes(k))) return "危大"
+  return null
+}
+
+/**
+ * Hook 1 · 预处理：从方案文档抽取结构化特征（纯规则版）
+ * 细化原 identifyProfessionTypes 的"只识别大类"——补出构造类型/材料/工艺/危大
+ */
+export async function identifySchemeFeatures(documentContent: string): Promise<SchemeFeatures> {
+  const text = documentContent
+
+  // 1) 大类：复用现有关键词打分，取 top1
+  const professions = await identifyProfessionTypes(text)
+  const profession = professions[0]?.id ?? "unknown"
+
+  // 2) 构造类型
+  const structureType = identifyStructureType(text)
+
+  // 3) 材料 / 4) 工艺
+  const materials = scanPresentKeywords(text, MATERIAL_KEYWORDS)
+  const processes = scanPresentKeywords(text, PROCESS_KEYWORDS)
+
+  // 5) 危大等级
+  const hazardLevel = identifyHazardLevel(text)
+
+  // 6) 建议规范
+  const possibleStandards = structureType ? (STRUCTURE_TYPE_STANDARDS[structureType] ?? []) : []
+
+  console.log(
+    `[Hook1] 特征识别: profession=${profession}, structure=${structureType ?? "—"}, ` +
+    `hazard=${hazardLevel ?? "—"}, materials=${materials.length}个, processes=${processes.length}个`
+  )
+
+  return { profession, structureType, materials, processes, hazardLevel, possibleStandards }
+}
+
 /**
  * 根据专业类型匹配相关文件
  */
@@ -424,6 +534,7 @@ export async function extractKnowledgeContext(
   professionTypes: ProfessionType[]
   contextContent: string
   loadedFiles: string[]
+  anchorClauses: MatchedClause[]
 }> {
   // 1. 加载所有知识库文件
   const allFiles = await loadKnowledgeBase()
@@ -475,10 +586,24 @@ export async function extractKnowledgeContext(
     loadedFiles.push(file.fileName.replace(/\.md$/i, ""))
   }
 
+  // ▸ Step 3 新增：Hook 1（识别方案特征）+ Hook 2（精准捞锚点条款）
+  //    并联在现有"按文件匹配"之后；条款库未就绪时降级为空（不影响主流程）
+  let anchorClauses: MatchedClause[] = []
+  try {
+    const features = await identifySchemeFeatures(documentContent)
+    anchorClauses = await getClausesByFeatures(features)
+    console.log(
+      `[Hook2] 精准锚点条款: ${anchorClauses.length} 条 (构造=${features.structureType ?? "—"}, 危大=${features.hazardLevel ?? "—"})`
+    )
+  } catch (e) {
+    console.warn("[Hook2] 锚点匹配失败，降级为无锚点:", e instanceof Error ? e.message : e)
+  }
+
   return {
     professionTypes,
     contextContent: contextParts.join("\n\n" + "═".repeat(50) + "\n\n"),
     loadedFiles,
+    anchorClauses,
   }
 }
 

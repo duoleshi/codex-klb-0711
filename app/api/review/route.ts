@@ -9,8 +9,11 @@ import {
   splitDocumentBySections,
   extractSimplifiedKnowledgeContext,
   identifyProfessionTypes,
+  identifySchemeFeatures,
+  DocumentChunk,
   CHUNK_CONFIG,
 } from "@/lib/knowledge-base"
+import { getClausesByFeatures, type MatchedClause } from "@/lib/clause-db"
 import {
   saveReviewRecord,
   saveReviewRecordToSqlite,
@@ -79,6 +82,7 @@ function buildReviewPrompt(
   currentDate: string,
   loadedFilesCount: string,
   knowledgeContext: string,
+  anchorClausesText: string,
   documentContent: string
 ): string {
   return `# 角色定位
@@ -90,6 +94,14 @@ function buildReviewPrompt(
 以下是与你审核任务相关的知识库内容，请严格按照此依据进行审核：
 ---
 ${knowledgeContext.slice(0, 80000)}
+---
+
+# 精准条款锚点（本次审核必须优先逐条核对的核心条款）
+
+以下条款是根据本方案的构造类型、涉及材料、关键工艺从规范中精准提取的核心条款原文，优先级高于上方通用知识库。审核时**必须逐条对照**：每条都要判断方案是否符合，并在报告里引用对应条款号与原文；方案违反任一条均须出具审核意见。
+
+---
+${anchorClausesText || "（本方案类型暂未配置锚点条款，按上方「审核依据」通用审核）"}
 ---
 
 # 待审核内容
@@ -331,7 +343,7 @@ export async function POST(request: NextRequest) {
         // 3. 提取知识库相关内容
         sendProgress({ stage: "knowledge_load", message: "正在匹配知识库...", percent: 96 })
         console.log("步骤 2: 智能匹配知识库...")
-        const { professionTypes, contextContent, loadedFiles } = await extractKnowledgeContext(documentContent)
+        const { professionTypes, contextContent, loadedFiles, anchorClauses } = await extractKnowledgeContext(documentContent)
 
         const professionNames = professionTypes.length > 0
           ? professionTypes.map(p => p.name).join("、")
@@ -356,12 +368,24 @@ export async function POST(request: NextRequest) {
           ? documentContent.slice(0, maxDocLength) + "\n\n[文档内容过长，已截断...]"
           : documentContent
 
+        const anchorClausesText = anchorClauses.length > 0
+          ? anchorClauses
+              .map((c) =>
+                `【${c.standard_code} 第${c.clause_no}条 ${c.clause_title}】\n` +
+                `原文：${c.clause_text}\n` +
+                `审核要点：${c.audit_points ?? ""}\n` +
+                `（匹配依据：${c.matchedBy.join("、")}）`
+              )
+              .join("\n\n")
+          : ""
+
         const prompt = buildReviewPrompt(
           file.name,
           professionNames,
           currentDate,
           loadedFiles.length.toString(),
           contextContent,
+          anchorClausesText,
           truncatedDoc
         )
 
@@ -470,6 +494,11 @@ const CHUNK_REVIEW_PROMPT_TEMPLATE = `# 角色定位
 {knowledgeContext}
 ---
 
+# 本片段精准条款锚点（必须优先逐条核对，违反任一条须出具意见）
+---
+{anchorClausesText}
+---
+
 # 待审核内容 - {chapterTitle}
 ---
 {documentContent}
@@ -496,6 +525,45 @@ const CHUNK_REVIEW_PROMPT_TEMPLATE = `# 角色定位
 4. 不要输出整体报告格式，只输出针对本片段的审核意见。
 `
 
+// 通用词黑名单：这些词几乎每个 chunk 都出现，无区分度，不作为 Hook3 分配依据
+// （不去掉的话"每块都含钢管/立杆/搭设"会导致每块都分到全部锚点，失去按主题分配的意义）
+const GENERIC_WORDS = new Set(["钢管", "立杆", "水平杆", "横杆", "搭设", "拆除", "检查", "验收", "设计计算", "施工", "材料"])
+
+/**
+ * Hook 3 · 把锚点条款按主题分配给相关 chunk
+ * 命中条件：chunk 含该条款的"强信号词"（trigger_materials/processes + clause_title 分词，
+ *           去掉通用词黑名单后的专属词，如"可调托座/剪刀撑/扫地杆/扣件/步距"），任一命中即分配
+ * 未命中的 chunk 不分配（按通用审核依据审核）
+ */
+function assignClausesToChunks(
+  anchorClauses: MatchedClause[],
+  chunks: DocumentChunk[]
+): Map<number, MatchedClause[]> {
+  const map = new Map<number, MatchedClause[]>()
+  if (anchorClauses.length === 0) return map
+
+  for (const chunk of chunks) {
+    const text = chunk.content
+    const matched: MatchedClause[] = []
+    for (const clause of anchorClauses) {
+      const tags = [clause.trigger_materials, clause.trigger_processes]
+        .filter((s): s is string => !!s)
+        .join(",")
+        .split(",")
+        .map((s) => s.trim())
+        .filter((w) => w.length >= 2 && !GENERIC_WORDS.has(w))
+      const titleWords = clause.clause_title
+        .split(/[\s（）()、/\\-]+/)
+        .map((s) => s.trim())
+        .filter((w) => w.length >= 2 && !GENERIC_WORDS.has(w))
+      const hit = tags.some((t) => text.includes(t)) || titleWords.some((w) => text.includes(w))
+      if (hit) matched.push(clause)
+    }
+    if (matched.length) map.set(chunk.id, matched)
+  }
+  return map
+}
+
 /**
  * 构建分块审核汇总提示词（硬编码模板，与 md 文件格式一致）
  */
@@ -505,7 +573,8 @@ function buildMergePrompt(
   currentDate: string,
   chunkCount: string,
   loadedFiles: string[],
-  chunkReports: string
+  chunkReports: string,
+  anchorClausesText?: string
 ): string {
   return `# 任务
 
@@ -514,6 +583,11 @@ function buildMergePrompt(
 # 分块审核报告
 ---
 ${chunkReports}
+---
+
+# 精准条款锚点（汇总时必须保留这些条款的核对意见，不得遗漏；引用条款号与原文必须与下方一致）
+---
+${anchorClausesText || "（无锚点）"}
 ---
 
 # 合并要求
@@ -614,158 +688,6 @@ ${loadedFiles.map((f, i) => `${i + 1}. ${f}`).join("\n")}
 `
 }
 
-/**
- * 分块审核处理函数
- */
-async function handleChunkedReview(
-  file: File,
-  documentContent: string
-): Promise<NextResponse> {
-  console.log("=== 开始分块审核流程 ===")
-
-  const currentDate = new Date().toLocaleDateString("zh-CN", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  })
-
-  try {
-    // 1. 识别专业类型（使用完整文档识别）
-    const professionTypes = await identifyProfessionTypes(documentContent)
-    const professionNames = professionTypes.length > 0
-      ? professionTypes.map(p => p.name).join("、")
-      : "通用工程"
-    console.log(`专业类型: ${professionNames}`)
-
-    // 2. 分割文档
-    const chunks = splitDocumentBySections(documentContent)
-    console.log(`文档已分割为 ${chunks.length} 个块`)
-
-    // 3. 对每个块进行审核
-    const chunkReports: string[] = []
-    const allLoadedFiles: string[] = []
-    let totalTokens = 0
-
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i]
-      console.log(`\n--- 审核块 ${i + 1}/${chunks.length}: "${chunk.chapterTitle}" (${chunk.charCount} 字符) ---`)
-
-      // 3.1 提取该块相关的精简知识库
-      const { contextContent: simplifiedContext, loadedFiles } =
-        await extractSimplifiedKnowledgeContext(chunk.content, professionTypes)
-
-      // 收集所有加载的知识库文件（去重）
-      for (const f of loadedFiles) {
-        if (!allLoadedFiles.includes(f)) {
-          allLoadedFiles.push(f)
-        }
-      }
-
-      // 3.2 构建提示词
-      const prompt = CHUNK_REVIEW_PROMPT_TEMPLATE
-        .replace("{knowledgeContext}", simplifiedContext.slice(0, CHUNK_CONFIG.MAX_KNOWLEDGE_PER_CHUNK))
-        .replace("{chapterTitle}", chunk.chapterTitle)
-        .replace("{documentContent}", chunk.content)
-
-      // 3.3 调用 API
-      const { client: chunkClient, modelName: chunkModelName } = getModelConfig("deepseek")
-      const completion = await chunkClient.chat.completions.create({
-        model: chunkModelName,
-        messages: [
-          {
-            role: "system",
-            content: "你是一位专业的施工方案审核专家，请对文档片段进行审核。",
-          },
-          { role: "user", content: prompt },
-        ],
-        stream: false,
-        temperature: 0.2,
-        max_tokens: 4000,
-      })
-
-      const chunkResult = completion.choices[0]?.message?.content || ""
-      totalTokens += completion.usage?.total_tokens || 0
-
-      // 3.4 保存块报告
-      chunkReports.push(`## 块 ${i + 1}: ${chunk.chapterTitle}\n\n${chunkResult}`)
-      console.log(`块 ${i + 1} 审核完成，Token: ${completion.usage?.total_tokens || "未知"}`)
-    }
-
-    // 4. 智能汇总
-    console.log("\n=== 开始智能汇总 ===")
-    const mergePrompt = buildMergePrompt(
-      file.name,
-      professionNames,
-      currentDate,
-      chunks.length.toString(),
-      allLoadedFiles,
-      chunkReports.join("\n\n---\n\n")
-    )
-
-    const mergeCompletion = await client.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: "你是一位专业的施工方案审核专家，请将多份分块审核报告合并成一份完整、专业的审核报告。",
-        },
-        { role: "user", content: mergePrompt },
-      ],
-      stream: false,
-      temperature: 0.2,
-      max_tokens: 8000,
-    })
-
-    const finalResult = mergeCompletion.choices[0]?.message?.content || ""
-    totalTokens += mergeCompletion.usage?.total_tokens || 0
-
-    console.log(`智能汇总完成，总 Token: ${totalTokens}`)
-
-    // 5. 提取审核结论
-    const reviewConclusion = extractConclusion(finalResult)
-
-    // 6. 保存审核记录
-    try {
-      if (userId) {
-        await saveReviewRecord({
-          filename: file.name,
-          file_size: file.size,
-          profession_types: professionTypes.map(p => p.name),
-          document_content: documentContent.slice(0, 10000),
-          review_result: finalResult,
-          review_conclusion: reviewConclusion,
-          knowledge_file: `分块审核 ${chunks.length} 个块`,
-          tokens_used: totalTokens,
-          userId,
-        })
-        console.log("审核记录已保存")
-      }
-    } catch (dbError) {
-      console.error("保存审核记录失败:", dbError)
-    }
-
-    // 7. 返回结果
-    return NextResponse.json({
-      success: true,
-      result: finalResult,
-      conclusion: reviewConclusion,
-      metadata: {
-        filename: file.name,
-        professionTypes: professionTypes.map(p => p.name),
-        chunkCount: chunks.length,
-        documentLength: documentContent.length,
-        tokensUsed: totalTokens,
-        reviewMode: "chunked",
-      },
-    })
-  } catch (error) {
-    console.error("分块审核失败:", error)
-    return NextResponse.json(
-      { error: `分块审核失败: ${error instanceof Error ? error.message : "未知错误"}` },
-      { status: 500 }
-    )
-  }
-}
 
 /**
  * 分块审核处理函数（SSE 版本）
@@ -798,10 +720,24 @@ async function handleChunkedReviewSSE(
       : "通用工程"
     console.log(`专业类型: ${professionNames}`)
 
+    // ▸ Step 4：Hook 1 + Hook 2 拿全局锚点（分块流程共用，注入各 chunk + 汇总）
+    let anchorClauses: MatchedClause[] = []
+    try {
+      const features = await identifySchemeFeatures(documentContent)
+      anchorClauses = await getClausesByFeatures(features)
+      console.log(`[Hook2] 分块流程精准锚点: ${anchorClauses.length} 条 (构造=${features.structureType ?? "—"}, 危大=${features.hazardLevel ?? "—"})`)
+    } catch (e) {
+      console.warn("[Hook2] 分块流程锚点匹配失败，降级无锚点:", e instanceof Error ? e.message : e)
+    }
+
     // 2. 分割文档
     sendProgress({ stage: "chunk_split", message: "正在分割文档...", percent: 15 })
     const chunks = splitDocumentBySections(documentContent)
     console.log(`文档已分割为 ${chunks.length} 个块`)
+
+    // Hook 3：把锚点按主题分给各 chunk（每块只看自己相关的锚点，上下文干净）
+    const chunkAnchorMap = assignClausesToChunks(anchorClauses, chunks)
+    console.log(`[Hook3] 锚点分配: ${[...chunkAnchorMap.entries()].map(([id, cs]) => `块${id + 1}=${cs.length}条`).join(", ")}`)
 
     // 3. 对每个块进行审核
     const chunkReports: string[] = []
@@ -833,9 +769,21 @@ async function handleChunkedReviewSSE(
         }
       }
 
-      // 构建提示词
+      // 构建提示词（含本 chunk 的专属锚点）
+      const chunkAnchors = chunkAnchorMap.get(chunk.id) ?? []
+      const chunkAnchorText = chunkAnchors.length > 0
+        ? chunkAnchors
+            .map((c) =>
+              `【${c.standard_code} 第${c.clause_no}条 ${c.clause_title}】\n` +
+              `原文：${c.clause_text}\n` +
+              `审核要点：${c.audit_points ?? ""}`
+            )
+            .join("\n\n")
+        : "（本片段无专项锚点，按上方审核依据通用审核）"
+
       const prompt = CHUNK_REVIEW_PROMPT_TEMPLATE
         .replace("{knowledgeContext}", simplifiedContext.slice(0, CHUNK_CONFIG.MAX_KNOWLEDGE_PER_CHUNK))
+        .replace("{anchorClausesText}", chunkAnchorText)
         .replace("{chapterTitle}", chunk.chapterTitle)
         .replace("{documentContent}", chunk.content)
 
@@ -870,13 +818,24 @@ async function handleChunkedReviewSSE(
     sendProgress({ stage: "chunk_merge", message: "正在汇总审核结果...", percent: 90 })
     console.log("\n=== 开始智能汇总 ===")
 
+    const globalAnchorText = anchorClauses.length > 0
+      ? anchorClauses
+          .map((c) =>
+            `【${c.standard_code} 第${c.clause_no}条 ${c.clause_title}】\n` +
+            `原文：${c.clause_text}\n` +
+            `审核要点：${c.audit_points ?? ""}`
+          )
+          .join("\n\n")
+      : ""
+
     const mergePrompt = buildMergePrompt(
       file.name,
       professionNames,
       currentDate,
       chunks.length.toString(),
       allLoadedFiles,
-      chunkReports.join("\n\n---\n\n")
+      chunkReports.join("\n\n---\n\n"),
+      globalAnchorText
     )
 
     const mergeCompletion = await client.chat.completions.create({
