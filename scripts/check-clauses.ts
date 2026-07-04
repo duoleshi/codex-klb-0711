@@ -28,11 +28,24 @@ async function main() {
     console.log("-".repeat(70))
   }
 
-  // 简单断言：轮扣式 5 条 + 盘扣式 5 条 = 10 条
-  const expectedNos = ["7.1.6","7.1.7","7.1.8","9.2.2","7.1.4","6.2.4","6.2.5","6.1.3","6.2.7","6.1.4","3.0.1","6.1.5","附录D","6.9.6","6.9.1","6.9.3","6.3.2","3.1.2","6.3.3","6.3.5","6.3.6","6.3.8","6.3.10","5.1.2","7.0.3","8.0.4","5.1.4","1.3","5.2.1","5.1.6","8.0.5","4.4.12","5.4.2","6.1.10","6.1.11","6.1.6","6.1.8","6.4.1","6.4.3","6.4.5"]
-  const gotNos = clauses.map((c) => c.clause_no).sort()
-  const ok = clauses.length === 41 && expectedNos.every((n) => gotNos.includes(n))
-  console.log(`\n${ok ? "✅" : "❌"} 共 ${clauses.length} 条（预期 41），条款号: ${gotNos.join(", ")}\n`)
+  // 断言：总数 + 按专业计数（13 专业合计 238）
+  const byProfession = clauses.reduce<Record<string, number>>((acc, c) => {
+    acc[c.profession] = (acc[c.profession] ?? 0) + 1
+    return acc
+  }, {})
+  const expected: Record<string, number> = {
+    template: 43, scaffolding: 23, foundation: 18, crane: 27, demolition: 20, underground: 20,
+    "curtain-wall": 17, pile: 12, "steel-structure": 22, underwater: 8,
+    "prefabricated-concrete": 18, "new-technology": 8, "limited-space": 14,
+    general: 85,
+  }
+  const okTotal = clauses.length === 335
+  const okProfessions = Object.keys(expected).every((p) => byProfession[p] === expected[p])
+  const ok = okTotal && okProfessions
+  const detail = Object.keys(expected)
+    .map((p) => `${p} ${byProfession[p] ?? 0}/${expected[p]}`)
+    .join(" | ")
+  console.log(`\n${ok ? "✅" : "❌"} 共 ${clauses.length} 条（预期 335）| ${detail}\n`)
   process.exit(ok ? 0 : 1)
 }
 

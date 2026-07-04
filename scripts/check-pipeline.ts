@@ -3,8 +3,7 @@
 // 运行：npx tsx scripts/check-pipeline.ts
 //
 // 预览实际注入 prompt 的「精准条款锚点」段文本（与 route.ts POST 里的格式化逻辑一致）。
-// 注意：本脚本不调用 extractKnowledgeContext（避免加载 574 个规范文件），
-//       只验证 Hook1→Hook2 这段新增串联；老的知识库匹配逻辑靠端到端验证。
+// 注意：本脚本只验证 Hook1→Hook2 这段串联（老路径已废除，extractKnowledgeContext 现仅返锚点）。
 
 import { identifySchemeFeatures } from "../lib/knowledge-base"
 import { getClausesByFeatures } from "../lib/clause-db"
@@ -51,10 +50,17 @@ async function main() {
   console.log(`\n识别特征: 构造=${features.structureType}, 危大=${features.hazardLevel}, 材料=${features.materials.length}个\n`)
   console.log(`${SEP}\n=== 将注入 prompt 的「精准条款锚点」段 ===\n${SEP}\n`)
   console.log(anchorClausesText || "（无锚点）")
-  console.log(`\n${SEP}\n共 ${clauses.length} 条锚点（预期 5）${SEP}`)
+  // 断言：构造专属 = 5 条且全 DB44/T 1876（轮扣式专属，零 JGJ 130 扣件式泄漏）；
+  //       强标 general 必带且排首条（Hook2 排序）。
+  const constructorClauses = clauses.filter((c) => c.structure_type !== null)
+  const generalCount = clauses.filter((c) => c.profession === "general").length
+  const constructorStandards = [...new Set(constructorClauses.map((c) => c.standard_code))]
+  const noLeak = constructorStandards.length === 1 && constructorStandards[0] === "DB44/T 1876-2016"
+  const firstIsGeneral = clauses.length > 0 && clauses[0].profession === "general"
+  console.log(`\n${SEP}\n共 ${clauses.length} 条 = 构造专属 ${constructorClauses.length}（${constructorStandards.join("/")}${noLeak ? "" : " ⚠️含其他体系泄漏"}) + 强标 general ${generalCount} + 专业通用 ${clauses.length - constructorClauses.length - generalCount}；首条${firstIsGeneral ? "是" : "非"} general\n${SEP}`)
 
-  const ok = clauses.length === 5
-  console.log(`\n${ok ? "✅" : "❌"} Step 3 串联验证 ${ok ? "通过" : "未通过"}\n`)
+  const ok = constructorClauses.length === 5 && noLeak && generalCount > 0 && firstIsGeneral
+  console.log(`\n${ok ? "✅" : "❌"} Step 3 串联验证 ${ok ? "通过" : "未通过"}（构造=5条 DB44/T 1876 无 JGJ 130 泄漏 / 强标必带 / 排首）\n`)
   process.exit(ok ? 0 : 1)
 }
 

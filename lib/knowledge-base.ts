@@ -11,9 +11,6 @@ import { getClausesByFeatures, type MatchedClause, type SchemeFeatures } from ".
 // 知识库文件夹路径 - 修改为审核依据文件夹
 const KNOWLEDGE_BASE_DIR = "方案审核依据"
 
-// 强制性通用标准文件路径
-const MANDATORY_STANDARDS_FILE = "《智能体审核依据》通用及专用技术文档.md"
-
 // 专业类型定义
 export interface ProfessionType {
   id: string
@@ -58,7 +55,7 @@ export const PROFESSION_TYPES: ProfessionType[] = [
   {
     id: "scaffolding",
     name: "脚手架工程",
-    keywords: ["脚手架", "落地式", "悬挑", "附着式升降", "吊篮", "卸料平台", "操作平台", "盘扣", "碗扣", "扣件式", "爬架"],
+    keywords: ["脚手架", "落地式脚手架", "悬挑脚手架", "悬挑式脚手架", "附着式升降", "附着式升降脚手架", "吊篮", "卸料平台", "操作平台", "爬架", "外脚手架", "外架"],
     relatedStandards: ["脚手架", "高处作业", "安全防护"],
     folderName: "4脚手架工程",
   },
@@ -246,92 +243,10 @@ export async function getKnowledgeBaseInfo(): Promise<{ fileCount: number }> {
   return { fileCount: files.length }
 }
 
-// 强制性通用标准文件路径
-const mandatoryStandardsFilePath = path.join(
-  process.cwd(),
-  MANDATORY_STANDARDS_FILE
-)
-
-// 强制性通用标准缓存
-let cachedMandatoryStandards: string | null = null
-
-/**
- * 加载强制性通用标准
- */
-async function loadMandatoryStandards(): Promise<string> {
-  // 检查缓存
-  if (cachedMandatoryStandards && knowledgeBaseDirPath === getKnowledgeBaseDir()) {
-    console.log("使用缓存的强制性通用标准")
-    return cachedMandatoryStandards
-  }
-
-  // 读取文件
-  if (!fs.existsSync(mandatoryStandardsFilePath)) {
-    console.warn(`强制性通用标准文件不存在: ${mandatoryStandardsFilePath}`)
-    return ""
-  }
-  console.log(`加载强制性通用标准: ${mandatoryStandardsFilePath}`)
-
-  cachedMandatoryStandards = fs.readFileSync(mandatoryStandardsFilePath, "utf-8").toString()
-  console.log(`加载完成: ${cachedMandatoryStandards.length} 字符`)
-
-  return cachedMandatoryStandards!
-}
-
-/**
- * 从《智能体审核依据》文件提取对应专业的强制性标准内容
- * 注意：由于智能体审核依据文件较大，这里只提取与专业相关的章节
- */
-function extractMandatoryStandardsByProfession(
-  mandatoryStandards: string,
-  profession: ProfessionType
-): string {
-  if (!mandatoryStandards) {
-    return ""
-  }
-
-  const lines = mandatoryStandards.split("\n")
-  const result: string[] = []
-
-  // 通用部分 (5.1)
-  let inGeneralSection = false
-
-  // 查找专业部分
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
-
-    // 检测是否是专业部分的开始
-    // 格式通常是: "5.3.X XX专业" 或 "5.3.X 《规范名称》"
-    if (line.match(/^5\.[23]\d*[\.\s]*(基坑|模板|脚手架|临时用电|起重|拆除|暗挖|幕墙|桩基|钢结构|有限空间|高处作业)/)) {
-      // 检查是否匹配当前专业
-      const professionKeywords = profession.keywords
-      const lineLower = line.toLowerCase()
-
-      const isMatch = professionKeywords.some(kw => lineLower.includes(kw))
-
-      if (isMatch) {
-        // 开始收集该专业的内容
-        for (let j = i; j < lines.length; j++) {
-          const nextLine = lines[j]
-          if (nextLine.match(/^5\.[23]\d/) && nextLine.startsWith("5.1")) {
-            // 遇到下一个章节，停止收集
-            break
-          }
-          if (nextLine.trim()) {
-            result.push(nextLine)
-          }
-        }
-      }
-    }
-  }
-
-  if (result.length === 0) {
-    console.warn("未找到对应专业的强制性标准")
-    return ""
-  }
-
-  return result.join("\n\n" + "═".repeat(20) + "\n")
-}
+// （老路径已废除）强制性通用标准（《智能体审核依据》md）整本加载 + 按专业切片逻辑已移除：
+//   通用依据现由 clause.db 中 profession="general" 的精准锚点承担（源数据 lib/general-clauses.json，
+//   由建办质63号/48号、部令37号、安全生产法、393号、GB55034 等提炼）。整本 md 因 context 限制读不完，
+//   且会把无关体系规范灌进审核，故废。
 
 /**
  * 识别文档的专业类型
@@ -373,36 +288,145 @@ export async function identifyProfessionTypes(documentContent: string): Promise<
 
 // 构造类型 → 高区分度关键词（用词组避免跨类型误命中：
 // 如轮扣式方案里会出现"扣件式剪刀撑"，必须用整词"扣件式钢管脚手架"才不误判）
-const STRUCTURE_TYPE_KEYWORDS: { type: string; keywords: string[] }[] = [
-  { type: "轮扣式", keywords: ["轮扣式", "轮扣钢管", "轮盘"] },
-  { type: "盘扣式", keywords: ["盘扣式", "承插型盘扣", "盘扣钢管"] },
-  { type: "扣件式", keywords: ["扣件式钢管脚手架", "扣件式脚手架", "扣件式钢管"] },
-  { type: "碗扣式", keywords: ["碗扣式", "碗扣"] },
-  { type: "套扣式", keywords: ["承插型套扣", "套扣式"] },
-  { type: "门式", keywords: ["门式钢管脚手架", "门式脚手架"] },
+// 注意：脚手架专业按"架体形式"(落地/悬挑/附着升降/吊篮/卸料平台)分构造，
+// 与模板专业按"连接方式"(轮扣/盘扣/扣件/碗扣/套扣/门式)分构造，两轴不相交。
+// profession 字段：identifyStructureType 按方案专业过滤词表，避免"落地扣件式外架"
+// 被模板专业的"扣件式"抢判（命中满堂支撑条款而非落地式脚手架条款）。
+const STRUCTURE_TYPE_KEYWORDS: {
+  type: string
+  profession: "template" | "scaffolding" | "foundation" | "crane" | "demolition" | "underground" | "curtain-wall" | "steel-structure" | "prefabricated-concrete"
+  keywords: string[]
+}[] = [
+  // ── 模板专业：连接方式轴 ──
+  { type: "轮扣式", profession: "template", keywords: ["轮扣式", "轮扣钢管", "轮扣架", "轮扣脚手架", "轮扣支撑", "轮扣式钢管", "轮盘"] },
+  { type: "盘扣式", profession: "template", keywords: ["盘扣式", "承插型盘扣", "承插型盘扣式", "盘扣钢管", "盘扣架", "盘扣脚手架", "盘扣支撑", "盘扣式钢管", "B型立杆", "Z型立杆"] },
+  { type: "扣件式", profession: "template", keywords: ["扣件式钢管脚手架", "扣件式脚手架", "扣件式钢管", "扣件式支撑架"] },
+  { type: "碗扣式", profession: "template", keywords: ["碗扣式", "碗扣", "碗扣架", "碗扣脚手架", "碗扣支撑"] },
+  { type: "套扣式", profession: "template", keywords: ["承插型套扣", "套扣式", "套扣架", "套扣脚手架"] },
+  { type: "门式", profession: "template", keywords: ["门式钢管脚手架", "门式脚手架", "门式支撑架"] },
+  // ── 脚手架专业：架体形式轴 ──
+  { type: "落地式脚手架", profession: "scaffolding", keywords: ["落地式脚手架", "落地作业脚手架", "落地式双排", "落地式单排", "落地式钢管脚手架"] },
+  { type: "悬挑式脚手架", profession: "scaffolding", keywords: ["悬挑式脚手架", "型钢悬挑脚手架", "悬挑脚手架", "型钢悬挑", "悬挑钢梁"] },
+  { type: "附着升降式脚手架", profession: "scaffolding", keywords: ["附着式升降脚手架", "附着升降脚手架", "爬架", "升降脚手架", "附着升降作业平台"] },
+  { type: "吊篮", profession: "scaffolding", keywords: ["高处作业吊篮", "电动吊篮", "悬挂式脚手架", "吊篮平台"] },
+  { type: "卸料平台", profession: "scaffolding", keywords: ["卸料平台", "卸料", "转料平台", "接料平台"] },
+  // ── 基坑专业：支护方法轴 ──
+  { type: "排桩支护", profession: "foundation", keywords: ["排桩", "支护桩", "灌注排桩", "钻孔灌注桩支护", "咬合桩"] },
+  { type: "地下连续墙", profession: "foundation", keywords: ["地下连续墙", "地连墙", "导墙", "成槽", "钢筋笼"] },
+  { type: "土钉墙", profession: "foundation", keywords: ["土钉墙", "土钉支护", "复合土钉墙", "喷射混凝土面层"] },
+  { type: "锚杆支护", profession: "foundation", keywords: ["锚杆支护", "预应力锚杆", "锚索", "土层锚杆", "锚固段"] },
+  { type: "放坡开挖", profession: "foundation", keywords: ["放坡开挖", "分级放坡", "过渡平台", "坡率法"] },
+  // ── 起重吊装专业：机械类型轴 ──
+  { type: "塔式起重机", profession: "crane", keywords: ["塔式起重机", "塔吊", "塔机", "塔式起重"] },
+  { type: "施工升降机", profession: "crane", keywords: ["施工升降机", "人货梯", "施工电梯", "SC升降机"] },
+  { type: "物料提升机", profession: "crane", keywords: ["物料提升机", "龙门架", "井架", "货用升降机"] },
+  { type: "流动式起重机", profession: "crane", keywords: ["流动式起重机", "汽车吊", "履带吊", "轮胎吊", "随车吊"] },
+  // ── 拆除爆破专业：拆除方式轴 ──
+  { type: "人工拆除", profession: "demolition", keywords: ["人工拆除", "人工剔凿"] },
+  { type: "机械拆除", profession: "demolition", keywords: ["机械拆除", "挖掘机拆除", "液压剪", "破碎锤"] },
+  { type: "爆破拆除", profession: "demolition", keywords: ["爆破拆除", "控制爆破", "拆除爆破"] },
+  // ── 暗挖专业：施工工法轴 ──
+  { type: "盾构法", profession: "underground", keywords: ["盾构", "盾构法", "盾构机", "土压平衡", "泥水平衡", "同步注浆"] },
+  { type: "顶管法", profession: "underground", keywords: ["顶管", "顶管法", "顶管机", "触变泥浆", "中继间"] },
+  { type: "矿山法", profession: "underground", keywords: ["矿山法", "喷锚暗挖", "新奥法", "锚喷支护", "管棚", "超前小导管"] },
+  { type: "冻结法", profession: "underground", keywords: ["冻结法", "冻结壁", "积极冻结", "联络通道冻结"] },
+  // ── 幕墙专业：幕墙形式轴 ──
+  { type: "构件式幕墙", profession: "curtain-wall", keywords: ["构件式幕墙", "构件式玻璃幕墙", "明框玻璃幕墙", "隐框玻璃幕墙", "半隐框玻璃幕墙", "构件式石材幕墙"] },
+  { type: "单元式幕墙", profession: "curtain-wall", keywords: ["单元式幕墙", "单元式玻璃幕墙", "单元幕墙", "单元组件", "单元板块"] },
+  { type: "点支承幕墙", profession: "curtain-wall", keywords: ["点支承玻璃幕墙", "点支承幕墙", "点式玻璃幕墙", "点式幕墙", "玻璃肋点支承", "拉索点支承"] },
+  // ── 钢结构专业：连接/工法轴 ──
+  { type: "焊接连接", profession: "steel-structure", keywords: ["焊接连接", "全焊透焊缝", "一级焊缝", "焊接工艺评定", "焊缝探伤", "超声波探伤"] },
+  { type: "高强螺栓连接", profession: "steel-structure", keywords: ["高强度螺栓连接", "高强螺栓", "大六角头螺栓", "扭剪型螺栓", "扭矩系数", "抗滑移系数", "初拧", "终拧"] },
+  { type: "钢构件吊装", profession: "steel-structure", keywords: ["钢构件吊装", "钢柱吊装", "钢梁吊装", "吊点", "索具", "平衡梁", "双机抬吊"] },
+  { type: "网架安装", profession: "steel-structure", keywords: ["网架安装", "空间钢结构", "钢网壳", "螺栓球节点", "整体提升", "整体顶升", "高空散装"] },
+  // ── 装配式专业：构件/连接轴 ──
+  { type: "预制构件吊装", profession: "prefabricated-concrete", keywords: ["预制构件吊装", "预制墙板吊装", "预制柱吊装", "吊环", "吊具", "分配梁", "预制构件"] },
+  { type: "钢筋灌浆套筒连接", profession: "prefabricated-concrete", keywords: ["钢筋灌浆套筒连接", "灌浆套筒", "套筒灌浆", "浆锚搭接", "灌浆料", "灌浆饱满度"] },
+  { type: "预制墙板安装", profession: "prefabricated-concrete", keywords: ["预制墙板安装", "预制剪力墙", "预制叠合板", "预制楼梯", "临时支撑", "坐浆"] },
 ]
+
+// 已定义构造的专业集合（identifyStructureType 据此判断是否按专业过滤词表）
+const PROFESSIONS_WITH_STRUCTURE = new Set(STRUCTURE_TYPE_KEYWORDS.map((s) => s.profession))
 
 // 涉及材料词表（命中即收录）
 const MATERIAL_KEYWORDS = [
   "钢管", "可调托座", "可调托撑", "顶托", "U型托", "可调底座", "底座",
   "扫地杆", "立杆", "横杆", "剪刀撑", "扣件", "丝杆", "垫板",
   "模板", "木胶合板", "竹胶板", "钢模板", "铝合金模板", "方木", "对拉螺栓",
+  // 基坑/暗挖/桩 扩展（支护/岩土类）
+  "支护结构", "支撑", "腰梁", "锚杆", "土钉", "喷射混凝土", "灌注桩", "护壁", "扩底", "井圈",
+  // 起重吊装扩展
+  "塔式起重机", "施工升降机", "物料提升机", "钢丝绳", "吊钩", "力矩限制器", "防坠安全器",
+  // 幕墙扩展
+  "硅酮结构密封胶", "铝型材", "立柱", "横梁", "后加锚栓", "钢化玻璃", "花岗石",
+  // 钢结构扩展
+  "高强度螺栓", "焊缝", "摩擦面", "防火涂料", "防腐涂料", "钢构件",
+  // 装配式扩展
+  "灌浆套筒", "灌浆料", "预制构件", "预制墙板", "预制楼梯",
+  // 通用型专业（无构造轴，靠材料识别方案）—— pile / underwater / new-technology / limited-space
+  "人工挖孔桩", "挖孔灌注桩", "孔内提升", "气体检测仪", "送风设备",
+  "潜水作业", "沉管隧道", "水下检测", "水下防腐涂料",
+  "新技术", "新工艺", "新材料", "新设备", "四新", "三新核准", "专题技术论证",
+  "有限空间", "密闭空间", "受限空间", "井下作业", "作业票", "通风机", "呼吸器", "测爆仪",
 ]
 
 // 关键工艺词表
 const PROCESS_KEYWORDS = [
   "搭设", "拆除", "安装", "拆卸", "设计计算", "验算", "监测",
   "检查", "验收", "吊装", "焊接", "混凝土浇筑",
+  // 基坑/暗挖/拆除等扩展工艺
+  "开挖", "降水", "爆破", "支护", "注浆", "张拉", "附墙",
+  "掘进", "拼装", "冻结",
 ]
 
 // 构造类型 → 建议规范号（possibleStandards 辅助字段）
 const STRUCTURE_TYPE_STANDARDS: Record<string, string[]> = {
+  // 模板专业（连接方式轴）
   "轮扣式": ["DB44/T 1876-2016", "T/CCIAT 0003-2019", "JGJ 162-2008"],
   "盘扣式": ["JGJ/T 231-2021", "JGJ 162-2008"],
   "扣件式": ["JGJ 130-2011", "JGJ 162-2008"],
   "碗扣式": ["JGJ 166-2016", "JGJ 162-2008"],
   "套扣式": ["DBJ/T 15-98-2019"],
   "门式": ["JGJ/T 128-2019"],
+  // 脚手架专业（架体形式轴）
+  "落地式脚手架": ["JGJ 130-2011", "GB 55023-2022", "GB51210-2016"],
+  "悬挑式脚手架": ["JGJ 130-2011", "GB 55023-2022"],
+  "附着升降式脚手架": ["JGJ 202-2010", "GB 55023-2022", "DBJ/T 15-233-2021", "JGJ/T 183-2019"],
+  "吊篮": ["JGJ 202-2010", "GB 19155"],
+  "卸料平台": ["JGJ 80-2016", "GB 55023-2022"],
+  // 基坑专业（支护方法轴）
+  "排桩支护": ["DBJ/T 15-20-2016", "JGJ/T 396-2018"],
+  "地下连续墙": ["DBJ/T 15-20-2016", "GB55003-2021"],
+  "土钉墙": ["GB50739-2011", "CECS96-1997", "DBJ/T 15-20-2016"],
+  "锚杆支护": ["GB50086-2015", "DBJ/T 15-20-2016"],
+  "放坡开挖": ["DBJ/T 15-20-2016", "JGJ 180-2009"],
+  // 起重吊装专业（机械类型轴）
+  "塔式起重机": ["GB5144-2006", "JGJ 196-2010", "JGJ/T 187-2019", "JGJ 332-2014"],
+  "施工升降机": ["JGJ 215-2010", "GB/T 34023-2017"],
+  "物料提升机": ["JGJ 88-2010"],
+  "流动式起重机": ["JGJ 276-2012", "GB 50278-2010"],
+  // 拆除爆破专业（拆除方式轴）
+  "人工拆除": ["JGJ 147-2016"],
+  "机械拆除": ["JGJ 147-2016", "CJJ 248-2016"],
+  "爆破拆除": ["JGJ 147-2016", "GB6722-2014", "GA991-2012"],
+  // 暗挖专业（施工工法轴）
+  "盾构法": ["GB50446-2017", "CJJ217-2014"],
+  "顶管法": ["DBJ/T 15-106-2015", "CECS246-2008"],
+  "矿山法": ["GB50086-2015", "TB 10304-2020"],
+  "冻结法": ["NB/T 10222-2019"],
+  // 幕墙专业（幕墙形式轴）
+  "构件式幕墙": ["JGJ 102-2003", "JGJ 133-2001", "JGJ 336-2016", "GB/T 21086-2007"],
+  "单元式幕墙": ["JGJ 102-2003", "JGJ 133-2001", "GB/T 21086-2007"],
+  "点支承幕墙": ["JGJ 102-2003", "GB/T 21086-2007"],
+  // 钢结构专业（连接/工法轴）
+  "焊接连接": ["GB 50661-2011", "GB 55006-2021", "GB 50205-2020"],
+  "高强螺栓连接": ["JGJ 82-2011", "GB/T 1231-2006", "GB 50205-2020"],
+  "钢构件吊装": ["GB 50755-2012", "GB 55006-2021"],
+  "网架安装": ["GB 50755-2012", "GB 50205-2020"],
+  // 装配式专业（构件/连接轴）
+  "预制构件吊装": ["JGJ 1-2014", "GB/T 51231-2016"],
+  "钢筋灌浆套筒连接": ["JGJ 1-2014", "GB/T 51231-2016"],
+  "预制墙板安装": ["JGJ 1-2014", "GB/T 51231-2016"],
 }
 
 function escapeRegExp(s: string): string {
@@ -422,9 +446,14 @@ function scanPresentKeywords(text: string, keywords: string[]): string[] {
   return keywords.filter((k) => text.includes(k))
 }
 
-function identifyStructureType(text: string): string | null {
+function identifyStructureType(text: string, profession?: string): string | null {
+  // 按专业过滤词表：每个专业只在自己的构造轴里选构造，避免跨专业误判
+  // （如"落地扣件式外架"被模板专业的"扣件式"抢判）。未知专业则扫全部（兼容老行为）。
+  const pool = profession && PROFESSIONS_WITH_STRUCTURE.has(profession as "template" | "scaffolding" | "foundation" | "crane" | "demolition" | "underground")
+    ? STRUCTURE_TYPE_KEYWORDS.filter((s) => s.profession === profession)
+    : STRUCTURE_TYPE_KEYWORDS
   let best: { type: string; score: number } | null = null
-  for (const { type, keywords } of STRUCTURE_TYPE_KEYWORDS) {
+  for (const { type, keywords } of pool) {
     const score = countKeywordHits(text, keywords)
     if (score > 0 && (!best || score > best.score)) {
       best = { type, score }
@@ -447,15 +476,16 @@ function identifyHazardLevel(text: string): string | null {
  * Hook 1 · 预处理：从方案文档抽取结构化特征（纯规则版）
  * 细化原 identifyProfessionTypes 的"只识别大类"——补出构造类型/材料/工艺/危大
  */
-export async function identifySchemeFeatures(documentContent: string): Promise<SchemeFeatures> {
+export async function identifySchemeFeatures(documentContent: string, lockedProfessionId?: string): Promise<SchemeFeatures> {
   const text = documentContent
 
-  // 1) 大类：复用现有关键词打分，取 top1
-  const professions = await identifyProfessionTypes(text)
-  const profession = professions[0]?.id ?? "unknown"
+  // 1) 大类：锁定时直接用用户选的专业；否则复用关键词打分取 top1
+  const profession = lockedProfessionId
+    ?? (await identifyProfessionTypes(text))[0]?.id
+    ?? "unknown"
 
-  // 2) 构造类型
-  const structureType = identifyStructureType(text)
+  // 2) 构造类型（按已识别专业过滤词表，避免跨专业误判）
+  const structureType = identifyStructureType(text, profession)
 
   // 3) 材料 / 4) 工艺
   const materials = scanPresentKeywords(text, MATERIAL_KEYWORDS)
@@ -467,144 +497,65 @@ export async function identifySchemeFeatures(documentContent: string): Promise<S
   // 6) 建议规范
   const possibleStandards = structureType ? (STRUCTURE_TYPE_STANDARDS[structureType] ?? []) : []
 
+  // 7) 外脚手架/卸料平台章节探测（方案B）：复用 identifyStructureType 扫 scaffolding 构造词表。
+  //    "落地式脚手架/悬挑式脚手架/附着升降式脚手架/吊篮/卸料平台" 为高区分度整词，
+  //    纯模板支撑方案正文不出现；一旦出现即说明方案含独立外架/平台章节 → 脚手架通用条款才带入。
+  const hasExternalScaffolding = profession === "scaffolding"
+    ? true
+    : !!identifyStructureType(text, "scaffolding")
+
   console.log(
-    `[Hook1] 特征识别: profession=${profession}, structure=${structureType ?? "—"}, ` +
-    `hazard=${hazardLevel ?? "—"}, materials=${materials.length}个, processes=${processes.length}个`
+    `[Hook1] 特征识别: profession=${profession}${lockedProfessionId ? "(锁定)" : ""}, structure=${structureType ?? "—"}, ` +
+    `hazard=${hazardLevel ?? "—"}, materials=${materials.length}个, processes=${processes.length}个, 外架章节=${hasExternalScaffolding ? "有" : "无"}`
   )
 
-  return { profession, structureType, materials, processes, hazardLevel, possibleStandards }
+  return { profession, structureType, materials, processes, hazardLevel, possibleStandards, hasExternalScaffolding, ...(lockedProfessionId ? { lockedProfession: lockedProfessionId } : {}) }
 }
 
-/**
- * 根据专业类型匹配相关文件
- */
-export async function matchRelevantFiles(
-  professionTypes: ProfessionType[],
-  allFiles: KnowledgeFile[]
-): Promise<KnowledgeFile[]> {
-  const relevantFiles: KnowledgeFile[] = []
-  const addedFileIds = new Set<string>()
-
-  // 1. 匹配专业相关文件
-  for (const profession of professionTypes) {
-    for (const file of allFiles) {
-      if (addedFileIds.has(file.id)) continue
-
-      // 检查文件路径是否包含专业文件夹名
-      if (file.filePath.includes(profession.folderName)) {
-        relevantFiles.push(file)
-        addedFileIds.add(file.id)
-        continue
-      }
-
-      // 检查文件关键词是否与专业相关标准匹配
-      const isRelated = profession.relatedStandards.some(standard =>
-        file.keywords.some(kw => kw.includes(standard) || standard.includes(kw)) ||
-        file.fileName.includes(standard)
-      )
-
-      if (isRelated) {
-        relevantFiles.push(file)
-        addedFileIds.add(file.id)
-      }
-    }
-  }
-
-  // 2. 匹配通用规范文件（通用法律法规标准规范审核依据 文件夹）
-  const generalFolderName = "通用法律法规标准规范审核依据"
-  for (const file of allFiles) {
-    if (addedFileIds.has(file.id)) continue
-
-    if (file.filePath.includes(generalFolderName)) {
-      relevantFiles.push(file)
-      addedFileIds.add(file.id)
-    }
-  }
-
-  console.log(`匹配到 ${relevantFiles.length} 个相关规范文件`)
-  return relevantFiles
-}
+// （老路径已废除）matchRelevantFiles（按专业文件夹整本加载 .md）已移除：会把整个模板夹的
+// 所有体系规范（含 JGJ 130 等）一锅端塞进 prompt，且 41 个文件 context 根本装不下（只截到 7 个）。
+// 现按 Hook1+Hook2 精准捞锚点，体系过滤在 getClausesByFeatures 内完成。
 
 /**
  * 提取审核所需的知识库内容
  */
 export async function extractKnowledgeContext(
-  documentContent: string
+  documentContent: string,
+  lockedProfessionId?: string
 ): Promise<{
   professionTypes: ProfessionType[]
-  contextContent: string
-  loadedFiles: string[]
   anchorClauses: MatchedClause[]
+  loadedStandards: string[]
 }> {
-  // 1. 加载所有知识库文件
-  const allFiles = await loadKnowledgeBase()
+  // ⚠️ 老路径已废除（matchRelevantFiles 整本读 .md + loadMandatoryStandards 切片）：
+  //   整本规范因 context 限制根本读不完（41 个通用文件只能截到 7 个），反而把不相关体系的
+  //   规范（如轮扣式方案里的 JGJ 130 扣件式）灌进去污染审核。
+  // 现唯一审核依据 = Hook1（方案特征）+ Hook2（精准锚点），其中 profession="general" 的
+  //   强标通用锚点每次必带（见 getClausesByFeatures 的 general 豁免）。
 
-  // 2. 加载强制性通用标准【优先】
-  const mandatoryStandards = await loadMandatoryStandards()
+  // 1. 识别专业类型：锁定时直接取该专业（跳过自动检测），未锁定走自动检测
+  const lockedProfession = lockedProfessionId ? PROFESSION_TYPES.find(p => p.id === lockedProfessionId) : undefined
+  const professionTypes = lockedProfession
+    ? [lockedProfession]
+    : await identifyProfessionTypes(documentContent)
 
-  // 3. 识别专业类型
-  const professionTypes = await identifyProfessionTypes(documentContent)
-
-  // 4. 匹配相关文件
-  const relevantFiles = await matchRelevantFiles(professionTypes, allFiles)
-
-  // 5. 如果没有匹配到任何文件， 加载默认文件
-  if (relevantFiles.length === 0) {
-    const defaultKeywords = ["安全生产", "危大工程", "安全管理"]
-    for (const file of allFiles) {
-      if (defaultKeywords.some(kw => file.fileName.includes(kw))) {
-        relevantFiles.push(file)
-      }
-    }
-  }
-
-  // 6. 构建上下文内容
-  const contextParts: string[] = []
-  const loadedFiles: string[] = []
-
-  // 6.1 添加强制性通用标准（按专业提取）
-  if (mandatoryStandards) {
-    for (const profession of professionTypes) {
-      const professionMandatoryContent = extractMandatoryStandardsByProfession(mandatoryStandards, profession)
-      if (professionMandatoryContent) {
-        contextParts.push(`【${profession.name} - 强制性通用标准】`)
-        contextParts.push(professionMandatoryContent)
-        loadedFiles.push(`《智能体审核依据》-${profession.name}`)
-      }
-    }
-  }
-
-  // 6.2 添加专业规范文件
-  for (const file of relevantFiles) {
-    // 限制每个文件的内容长度,避免过长
-    const maxContentLength = 25000 // 单个文件最大 25KB， 调整一下
-    var content = file.content.length > maxContentLength
-      ? file.content.slice(0, maxContentLength) + "\n\n[内容过长，已截断]"
-      : file.content
-
-    contextParts.push(`【${file.fileName.replace(/\.md$/i, "")}】\n${content}`)
-    loadedFiles.push(file.fileName.replace(/\.md$/i, ""))
-  }
-
-  // ▸ Step 3 新增：Hook 1（识别方案特征）+ Hook 2（精准捞锚点条款）
-  //    并联在现有"按文件匹配"之后；条款库未就绪时降级为空（不影响主流程）
+  // 2. Hook1（方案特征）+ Hook2（精准锚点）—— 唯一审核依据来源
   let anchorClauses: MatchedClause[] = []
   try {
-    const features = await identifySchemeFeatures(documentContent)
+    const features = await identifySchemeFeatures(documentContent, lockedProfessionId)
     anchorClauses = await getClausesByFeatures(features)
+    const generalCount = anchorClauses.filter(c => c.profession === "general").length
     console.log(
-      `[Hook2] 精准锚点条款: ${anchorClauses.length} 条 (构造=${features.structureType ?? "—"}, 危大=${features.hazardLevel ?? "—"})`
+      `[Hook2] 精准锚点条款: ${anchorClauses.length} 条${lockedProfessionId ? `(锁定=${lockedProfessionId})` : ""} (构造=${features.structureType ?? "—"}, 危大=${features.hazardLevel ?? "—"}, 含强标通用 ${generalCount})`
     )
   } catch (e) {
     console.warn("[Hook2] 锚点匹配失败，降级为无锚点:", e instanceof Error ? e.message : e)
   }
 
-  return {
-    professionTypes,
-    contextContent: contextParts.join("\n\n" + "═".repeat(50) + "\n\n"),
-    loadedFiles,
-    anchorClauses,
-  }
+  // 3. 锚点涉及的去重规范号（替代旧 loadedFiles 的展示用途，给前端/报告显示"用了哪些规范"）
+  const loadedStandards = [...new Set(anchorClauses.map(c => c.standard_code))]
+
+  return { professionTypes, anchorClauses, loadedStandards }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -784,121 +735,7 @@ export function shouldUseChunkedReview(
   }
 }
 
-/**
- * 根据文档块内容提取精简的知识库上下文
- * 只包含与该块内容最相关的规范
- */
-export async function extractSimplifiedKnowledgeContext(
-  chunkContent: string,
-  professionTypes: ProfessionType[]
-): Promise<{
-  contextContent: string
-  loadedFiles: string[]
-}> {
-  // 1. 加载所有知识库文件
-  const allFiles = await loadKnowledgeBase()
-
-  // 2. 分析块的章节类型，确定需要哪些规范
-  const chunkKeywords = extractChunkKeywords(chunkContent)
-
-  // 3. 匹配相关文件
-  const relevantFiles: KnowledgeFile[] = []
-  const addedFileIds = new Set<string>()
-
-  // 3.1 匹配专业相关文件
-  for (const profession of professionTypes) {
-    for (const file of allFiles) {
-      if (addedFileIds.has(file.id)) continue
-
-      // 检查文件路径是否包含专业文件夹名
-      if (file.filePath.includes(profession.folderName)) {
-        // 进一步检查文件关键词是否与块内容相关
-        const isRelevantToChunk = chunkKeywords.some(kw =>
-          file.fileName.includes(kw) ||
-          file.content.substring(0, 2000).includes(kw)
-        )
-
-        if (isRelevantToChunk || file.filePath.includes("通用法律法规")) {
-          relevantFiles.push(file)
-          addedFileIds.add(file.id)
-        }
-      }
-    }
-  }
-
-  // 3.2 始终包含通用法律法规
-  const generalFolderName = "通用法律法规标准规范审核依据"
-  for (const file of allFiles) {
-    if (addedFileIds.has(file.id)) continue
-    if (file.filePath.includes(generalFolderName)) {
-      relevantFiles.push(file)
-      addedFileIds.add(file.id)
-    }
-  }
-
-  // 4. 构建上下文，限制总长度
-  const contextParts: string[] = []
-  const loadedFiles: string[] = []
-  let totalLength = 0
-  const maxLength = CHUNK_CONFIG.MAX_KNOWLEDGE_PER_CHUNK
-
-  for (const file of relevantFiles) {
-    if (totalLength >= maxLength) break
-
-    const maxFileLength = Math.min(15000, maxLength - totalLength)
-    const content = file.content.length > maxFileLength
-      ? file.content.slice(0, maxFileLength) + "\n\n[内容过长，已截断]"
-      : file.content
-
-    contextParts.push(`【${file.fileName.replace(/\.md$/i, "")}】\n${content}`)
-    loadedFiles.push(file.fileName.replace(/\.md$/i, ""))
-    totalLength += content.length
-  }
-
-  return {
-    contextContent: contextParts.join("\n\n" + "─".repeat(30) + "\n\n"),
-    loadedFiles,
-  }
-}
-
-/**
- * 提取文档块的关键词
- */
-function extractChunkKeywords(content: string): string[] {
-  const keywords: string[] = []
-
-  // 章节类型关键词映射
-  const sectionKeywords: { pattern: RegExp; keywords: string[] }[] = [
-    { pattern: /编制依据|编制说明|编制目的/i, keywords: ["规范", "标准", "法规", "法律"] },
-    { pattern: /工程概况|工程简介|工程情况/i, keywords: ["工程", "项目", "建设"] },
-    { pattern: /施工方法|技术方案|施工工艺|技术措施/i, keywords: ["施工", "技术", "工艺", "方法"] },
-    { pattern: /安全措施|安全管理|安全保障/i, keywords: ["安全", "防护", "保护", "措施"] },
-    { pattern: /质量保证|质量控制|质量管理/i, keywords: ["质量", "验收", "检验", "控制"] },
-    { pattern: /应急预案|应急措施|应急救援/i, keywords: ["应急", "救援", "事故", "预案"] },
-    { pattern: /监测|监控|监测方案/i, keywords: ["监测", "观测", "检测", "监控"] },
-    { pattern: /计算书|计算|验算/i, keywords: ["计算", "验算", "荷载", "强度"] },
-    { pattern: /组织|管理|人员|机构/i, keywords: ["组织", "管理", "人员", "机构"] },
-  ]
-
-  // 检测章节类型
-  for (const { pattern, keywords: kws } of sectionKeywords) {
-    if (pattern.test(content)) {
-      keywords.push(...kws)
-    }
-  }
-
-  // 提取专业相关关键词
-  const professionKeywords = [
-    "基坑", "脚手架", "模板", "临时用电", "起重", "吊装", "拆除", "暗挖",
-    "人工挖孔桩", "有限空间", "钢结构", "幕墙", "高处作业", "防护"
-  ]
-
-  for (const kw of professionKeywords) {
-    if (content.includes(kw)) {
-      keywords.push(kw)
-    }
-  }
-
-  return [...new Set(keywords)]  // 去重
-}
+// （老路径已废除）extractSimplifiedKnowledgeContext + extractChunkKeywords 已移除：
+//   分块流程不再按文件夹加载整本 .md，改由 Hook3（assignClausesToChunks）把精准锚点按主题分到各块 +
+//   汇总时用全局 anchorClauses（含强标通用）。
 

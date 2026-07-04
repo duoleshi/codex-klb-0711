@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { FileCheck, RefreshCw, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -78,13 +78,22 @@ function ProgressDisplay({
 
 export function Hero() {
   const [file, setFile] = useState<File | null>(null)
-  const [selectedProfession, setSelectedProfession] = useState<string>("")
+  const [professions, setProfessions] = useState<{ id: string; name: string }[]>([])
+  const [selectedProfession, setSelectedProfession] = useState<string>("auto")
   const [selectedModel, setSelectedModel] = useState<string>("deepseek")
   const [status, setStatus] = useState<ReviewStatus>("idle")
   const [result, setResult] = useState<string>("")
   const [error, setError] = useState<string>("")
   const [progress, setProgress] = useState<ProgressEvent | null>(null)
   const [percent, setPercent] = useState(0)
+
+  // 拉取 13 危大专业列表（下拉动态渲染，避免硬编码与后端不一致）
+  useEffect(() => {
+    fetch("/api/professions")
+      .then((r) => r.json())
+      .then((data: { id: string; name: string }[]) => setProfessions(data))
+      .catch(() => {})
+  }, [])
 
   const handleReview = useCallback(async () => {
     if (!file) return
@@ -99,6 +108,9 @@ export function Hero() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("model", selectedModel)
+      if (selectedProfession && selectedProfession !== "auto") {
+        formData.append("profession", selectedProfession)
+      }
 
       // 使用 fetch + ReadableStream 接收 SSE
       const response = await fetch("/api/review", {
@@ -224,9 +236,10 @@ export function Hero() {
                   <SelectValue placeholder="请选择专业领域..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="房屋建筑工程">房屋建筑工程</SelectItem>
-                  <SelectItem value="市政工程">市政工程</SelectItem>
-                  <SelectItem value="水利水务工程">水利水务工程</SelectItem>
+                  <SelectItem value="auto">自动识别（默认）</SelectItem>
+                  {professions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
