@@ -131,6 +131,29 @@ async function runCaseOrder(
   return ok
 }
 
+// 未锁定专业时零跨专业泄漏验证（治盾构机吊装方案命中模板监测 DBJ/T 15-197 这类污染）
+// 关键：features 故意含"监测点/沉降"等模板监测触发词，验证 profession 过滤仍把模板条款挡住
+async function runCaseNoForeignUnlocked(
+  name: string,
+  features: SchemeFeatures,
+  mainProfession: string,
+  expectMinCount: number
+): Promise<boolean> {
+  const m = await getClausesByFeatures(features)
+  const foreign = m.filter((c) => c.profession !== mainProfession && c.profession !== "general")
+  const hasGeneral = m.some((c) => c.profession === "general")
+  console.log(`\n${SEP}\n${name}\n${SEP}`)
+  console.log(`命中 ${m.length} 条（主专业 ${mainProfession} + 强标 general），外专业泄漏 ${foreign.length} 条，含强标 ${hasGeneral ? "✓" : "✗"}`)
+  if (foreign.length > 0) {
+    for (const c of foreign.slice(0, 5)) {
+      console.log(`  ⚠️ 泄漏 ${c.profession}: ${c.standard_code} 第${c.clause_no}条`)
+    }
+  }
+  const ok = foreign.length === 0 && hasGeneral && m.length >= expectMinCount
+  console.log(`${ok ? "✅" : "❌"} ${ok ? "通过" : "未通过"}`)
+  return ok
+}
+
 async function main() {
   const wheelCoupler: SchemeFeatures = {
     profession: "template", structureType: "轮扣式",
@@ -353,10 +376,18 @@ async function main() {
     "JGJ/T 231-2021", "6.2.2",
     "JGJ 300-2013", "5.2.1"
   )
+  // 未锁定专业时零跨专业泄漏（治盾构机吊装方案命中模板监测条款的污染）
+  // features 故意含"监测点/沉降/监测"——模拟方案有监测章节，验证即使含监测词，模板条款也被 profession 过滤挡住
+  const craneLifting: SchemeFeatures = {
+    profession: "crane", structureType: "流动式起重机",
+    materials: ["履带吊", "吊耳", "钢丝绳", "卸扣", "吊钩", "监测点", "沉降"],
+    processes: ["吊装", "设计计算", "监测", "验收"], hazardLevel: null, possibleStandards: ["JGJ 276-2012"],
+  }
+  const ok36 = await runCaseNoForeignUnlocked("Case 36 起重方案(未锁定·含监测词) → 零模板/脚手架泄漏", craneLifting, "crane", 90)
 
   const ok = ok1 && ok2 && ok3 && ok4 && ok5 && ok6 && ok7 && ok8 && ok9 && ok10 && ok11 && ok12
     && ok13 && ok14 && ok15 && ok16 && ok17 && ok18 && ok19 && ok20
-    && ok21 && ok22 && ok23 && ok24 && ok25 && ok26 && ok27 && ok28 && ok29 && ok30 && ok31 && ok32 && ok33 && ok34 && ok35
+    && ok21 && ok22 && ok23 && ok24 && ok25 && ok26 && ok27 && ok28 && ok29 && ok30 && ok31 && ok32 && ok33 && ok34 && ok35 && ok36
   console.log(`\n${SEP}\n${ok ? "✅" : "❌"} 构造隔离验证 ${ok ? "全部通过" : "未通过"}\n${SEP}\n`)
   process.exit(ok ? 0 : 1)
 }

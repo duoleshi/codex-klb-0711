@@ -48,7 +48,7 @@ export const PROFESSION_TYPES: ProfessionType[] = [
   {
     id: "crane",
     name: "起重吊装及起重机械安装拆卸工程",
-    keywords: ["起重吊装", "塔吊", "塔式起重机", "施工电梯", "物料提升机", "龙门吊", "履带吊", "起重机械", "吊装", "安装", "拆卸"],
+    keywords: ["起重吊装", "塔吊", "塔式起重机", "施工电梯", "物料提升机", "龙门吊", "履带吊", "起重机械", "吊装", "盾构机吊装", "大型设备吊装", "重型吊装", "安装", "拆卸"],
     relatedStandards: ["起重", "吊装", "起重机", "机械设备"],
     folderName: "3起重吊装及起重机械安装拆卸工程",
   },
@@ -320,7 +320,7 @@ const STRUCTURE_TYPE_KEYWORDS: {
   { type: "塔式起重机", profession: "crane", keywords: ["塔式起重机", "塔吊", "塔机", "塔式起重"] },
   { type: "施工升降机", profession: "crane", keywords: ["施工升降机", "人货梯", "施工电梯", "SC升降机"] },
   { type: "物料提升机", profession: "crane", keywords: ["物料提升机", "龙门架", "井架", "货用升降机"] },
-  { type: "流动式起重机", profession: "crane", keywords: ["流动式起重机", "汽车吊", "履带吊", "轮胎吊", "随车吊"] },
+  { type: "流动式起重机", profession: "crane", keywords: ["流动式起重机", "汽车吊", "履带吊", "轮胎吊", "随车吊", "盾构机吊装", "大型设备吊装", "重型吊装"] },
   // ── 拆除爆破专业：拆除方式轴 ──
   { type: "人工拆除", profession: "demolition", keywords: ["人工拆除", "人工剔凿"] },
   { type: "机械拆除", profession: "demolition", keywords: ["机械拆除", "挖掘机拆除", "液压剪", "破碎锤"] },
