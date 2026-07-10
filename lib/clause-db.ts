@@ -1101,6 +1101,176 @@ const SEED_CLAUSES: SeedClause[] = [
     priority: 5,
     enabled: 1,
   },
+  // ── 卸料/操作平台通用锚点（JGJ 80-2016，structure_type=null 以兼容"悬挑外架+卸料平台"混合方案）──
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.1.1",
+    clause_title: "操作平台设计计算与专项方案",
+    clause_text:
+      "操作平台应通过设计计算,并应编制专项方案,架体构造与材质应满足国家现行相关标准的规定。",
+    audit_points:
+      "核对卸料/操作平台基本前提：必须有设计计算和专项方案，架体构造、材质应满足现行标准。方案只有搭设做法、无平台结构计算或专项方案即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,悬挑式操作平台",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.1.2",
+    clause_title: "操作平台材料与脚手板",
+    clause_text:
+      "操作平台的架体结构应采用钢管、型钢及其他等效性能材料组装,并应符合现行国家标准《钢结构设计规范》GB50017及国家现行有关脚手架标准的规定。平台面铺设的钢、木或竹胶合板等材质的脚手板,应符合材质和承载力要求,并应平整满铺及可靠固定。",
+    audit_points:
+      "核对操作平台材料：架体结构采用钢管、型钢或等效材料，平台脚手板应满足材质和承载力要求并平整满铺、可靠固定。方案未明确平台材料或脚手板固定措施即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,型钢,脚手板",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 4,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.1",
+    clause_title: "悬挑式操作平台主体结构支承",
+    clause_text:
+      "悬挑式操作平台设置应符合下列规定：操作平台的搁置点、拉结点、支撑点应设置在稳定的主体结构上,且应可靠连接；严禁将操作平台设置在临时设施上；操作平台的结构应稳定可靠,承载力应符合设计要求。",
+    audit_points:
+      "核对悬挑式卸料/操作平台支承：搁置点、拉结点、支撑点必须设置在稳定主体结构上并可靠连接，严禁设在临时设施上，承载力应符合设计要求。方案把支承或拉结落在外架、临设上即严重违规。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,悬挑式操作平台,主体结构,搁置点,拉结点,支撑点",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.2",
+    clause_title: "悬挑长度、荷载与锚固",
+    clause_text:
+      "悬挑式操作平台的悬挑长度不宜大于5m,均布荷载不应大于5.5kN/m²,集中荷载不应大于15kN,悬挑梁应锚固固定。",
+    audit_points:
+      "核对悬挑式卸料/操作平台限值：悬挑长度≤5m（不宜），均布荷载≤5.5kN/m²（不应），集中荷载≤15kN（不应），悬挑梁应锚固固定。方案超限或未说明锚固即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,悬挑梁,悬挑钢梁",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.3",
+    clause_title: "斜拉钢丝绳承载要求",
+    clause_text:
+      "采用斜拉方式的悬挑式操作平台,平台两侧的连接吊环应与前后两道斜拉钢丝绳连接,每一道钢丝绳应能承载该侧所有荷载。",
+    audit_points:
+      "核对斜拉式悬挑卸料平台钢丝绳：平台两侧吊环应与前后两道斜拉钢丝绳连接，且每一道钢丝绳均应能承载该侧所有荷载。方案写成钢丝绳仅作安全储备、不参与平台受力验算即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,悬挑式操作平台,钢丝绳,吊环",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.5",
+    clause_title: "悬臂梁式平台型钢与节点计算",
+    clause_text:
+      "采用悬臂梁式的操作平台,应采用型钢制作悬挑梁或悬挑桁架,不得使用钢管,其节点应采用螺栓或焊接的刚性节点。当平台板上的主梁采用与主体结构预埋件焊接时,预埋件、焊缝均应经设计计算,建筑主体结构应同时满足强度要求。",
+    audit_points:
+      "卸料平台专用。核对悬臂梁式卸料/操作平台：悬挑梁或悬挑桁架应采用型钢，不得使用钢管；节点应为螺栓或焊接刚性节点；预埋件、焊缝和主体结构强度应计算。方案用钢管悬挑或无节点/预埋件计算即不符。该条不用于悬挑外脚手架拉杆节点审查，悬挑脚手架本体优先引用JGJ 130。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,型钢,悬挑梁,预埋件,焊缝,主体结构",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.6",
+    clause_title: "吊环与吊运连接",
+    clause_text:
+      "悬挑式操作平台应设置4个吊环,吊运时应使用卡环,不得使吊钩直接钩挂吊环。吊环应按通用吊环或起重吊环设计,并应满足强度要求。",
+    audit_points:
+      "核对悬挑式卸料/操作平台吊运：应设置4个吊环，吊运时使用卡环，不得用吊钩直接钩挂吊环；吊环应按通用吊环或起重吊环设计并满足强度。方案吊环数量不足或吊钩直挂即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,吊环,卡环,吊钩",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 4,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.7",
+    clause_title: "钢丝绳夹连接数量",
+    clause_text:
+      "悬挑式操作平台安装时,钢丝绳应采用专用的钢丝绳夹连接,钢丝绳夹数量应与钢丝绳直径相匹配,且不得少于4个。建筑物锐角、利口周围系钢丝绳处应加衬软垫物。",
+    audit_points:
+      "核对悬挑式卸料平台钢丝绳连接：应采用专用钢丝绳夹，数量与直径匹配且不少于4个；锐角、利口处应加衬软垫物。方案绳夹少于4个或无防割保护即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,钢丝绳,钢丝绳夹",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 4,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "6.4.10",
+    clause_title: "悬挑式操作平台结构计算",
+    clause_text: "悬挑式操作平台的结构设计计算应符合本规范附录C的规定。",
+    audit_points:
+      "核对悬挑式卸料/操作平台计算书：结构设计计算应按JGJ 80-2016附录C执行，不能只给构造做法或套用外脚手架计算书。方案缺少平台主梁、次梁、钢丝绳或斜撑验算即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,悬挑式操作平台,钢丝绳,悬挑梁",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
+  {
+    standard_code: "JGJ 80-2016",
+    standard_name: "建筑施工高处作业安全技术规范",
+    clause_no: "C.0.4",
+    clause_title: "钢丝绳拉力与安全系数验算",
+    clause_text:
+      "钢丝绳验算应符合下列规定：钢丝绳应按公式计算所受拉力标准值；钢丝绳的拉力应按公式验算钢丝绳的安全系数K，[K]取值为10。",
+    audit_points:
+      "核对悬挑式卸料平台钢丝绳验算：应计算钢丝绳拉力标准值，并验算钢丝绳安全系数K，规范规定安全系数取值为10。方案将钢丝绳作为安全储备而不计算拉力和安全系数即不符。",
+    profession: "scaffolding",
+    structure_type: null,
+    trigger_materials: "卸料平台,操作平台,钢丝绳,安全系数",
+    trigger_processes: null,
+    hazard_level: null,
+    priority: 5,
+    enabled: 1,
+  },
   {
     standard_code: "GB 55023-2022",
     standard_name: "施工脚手架通用规范",
@@ -1506,7 +1676,7 @@ const SEED_CLAUSES: SeedClause[] = [
       "核对方案是否明确基坑支护结构的安全等级（一/二/三级）。判定原则：基坑周边存在受影响的既有住宅/公共建筑/道路/地下管线，或地质条件复杂、缺少相近基坑经验时定一级；破坏不会危及生命、损失轻微时定三级；对大多数基坑定二级。安全等级决定所有稳定性验算的安全系数取值（如嵌固稳定 K_e 一/二/三级≥1.25/1.2/1.15）及构件重要性系数，方案未明确安全等级则后续所有计算无法核验。常见错误：方案通篇未明确安全等级、或等级与基坑深度/周边环境不匹配（如深基坑+紧邻建筑却定三级）。",
     profession: "foundation",
     structure_type: null,
-    trigger_materials: "安全等级,一级基坑,二级基坑,三级基坑,破坏后果,基坑深度",
+    trigger_materials: "安全等级,一级基坑,二级基坑,三级基坑,破坏后果,基坑深度,开挖深度,支护结构,稳定性,边坡,土方开挖",
     trigger_processes: "设计计算,选型",
     hazard_level: null,
     priority: 5,
@@ -4498,6 +4668,7 @@ function syncSeedClauses(db: initSqlJs.Database): number {
      profession, structure_type, trigger_materials, trigger_processes, hazard_level, priority, enabled)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
   let inserted = 0
+  let updated = 0
   const allSeed = [...SEED_CLAUSES, ...GENERAL_SEED_CLAUSES]
   for (const c of allSeed) {
     // 幂等：按 规范号+条款号 去重，已存在则跳过（保留人工对老记录的修改）
@@ -4511,12 +4682,48 @@ function syncSeedClauses(db: initSqlJs.Database): number {
         c.profession, c.structure_type, c.trigger_materials, c.trigger_processes, c.hazard_level, c.priority, c.enabled,
       ])
       inserted++
+    } else if (seedClauseNeedsRefresh(db, c)) {
+      db.run(
+        `UPDATE clause
+         SET standard_name = ?, clause_title = ?, clause_text = ?, audit_points = ?,
+             profession = ?, structure_type = ?, trigger_materials = ?, trigger_processes = ?,
+             hazard_level = ?, priority = ?, enabled = ?, updated_at = datetime('now','localtime')
+         WHERE standard_code = ? AND clause_no = ?`,
+        [
+          c.standard_name, c.clause_title, c.clause_text, c.audit_points,
+          c.profession, c.structure_type, c.trigger_materials, c.trigger_processes,
+          c.hazard_level, c.priority, c.enabled,
+          c.standard_code, c.clause_no,
+        ]
+      )
+      updated++
     }
   }
-  if (inserted > 0) {
-    console.log(`[clause-db] 同步种子条款: 新增 ${inserted} 条（专业种子 ${SEED_CLAUSES.length} + 强标通用 ${GENERAL_SEED_CLAUSES.length}）`)
+  if (inserted > 0 || updated > 0) {
+    console.log(`[clause-db] 同步种子条款: 新增 ${inserted} 条，刷新 ${updated} 条（专业种子 ${SEED_CLAUSES.length} + 强标通用 ${GENERAL_SEED_CLAUSES.length}）`)
   }
-  return inserted
+  return inserted + updated
+}
+
+function seedClauseNeedsRefresh(db: initSqlJs.Database, c: SeedClause): boolean {
+  if (c.standard_code !== "建办质〔2021〕48号" || c.clause_no !== "（三）.2") return false
+
+  const existing = db.exec(
+    `SELECT standard_name, clause_title, clause_text, audit_points,
+            profession, structure_type, trigger_materials, trigger_processes,
+            hazard_level, priority, enabled
+     FROM clause WHERE standard_code = ? AND clause_no = ?`,
+    [c.standard_code, c.clause_no]
+  )
+  const row = existing[0]?.values[0]
+  if (!row) return false
+
+  const next = [
+    c.standard_name, c.clause_title, c.clause_text, c.audit_points,
+    c.profession, c.structure_type, c.trigger_materials, c.trigger_processes,
+    c.hazard_level, c.priority, c.enabled,
+  ]
+  return next.some((value, index) => row[index] !== value)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

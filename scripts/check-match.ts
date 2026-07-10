@@ -368,7 +368,7 @@ async function main() {
     hasExternalScaffolding: true,
   }
   const ok33 = await runCaseScaffoldingGeneric("Case 33 纯盘扣式模板(无外架章节) → 脚手架通用条款 0 条", pureTemplate, 0)
-  const ok34 = await runCaseScaffoldingGeneric("Case 34 模板+外架混合(探测到外架章节) → 脚手架通用条款带入", templateWithExt, 4)
+  const ok34 = await runCaseScaffoldingGeneric("Case 34 模板+外架混合(探测到外架章节) → 脚手架通用条款带入", templateWithExt, 14)
   // 体系专用优先：盘扣式方案命中里，JGJ/T 231 6.2.2(专用)应排在 JGJ 300 5.2.1(通用)前
   const ok35 = await runCaseOrder(
     "Case 35 盘扣式 → 6.2.2(专用)排在JGJ300 5.2.1(通用)前",

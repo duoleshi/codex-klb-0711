@@ -28,24 +28,24 @@ async function main() {
     console.log("-".repeat(70))
   }
 
-  // 断言：总数 + 按专业计数（13 专业合计 238）
+  // 断言：总数 + 按专业计数（13 专业合计 265）
   const byProfession = clauses.reduce<Record<string, number>>((acc, c) => {
     acc[c.profession] = (acc[c.profession] ?? 0) + 1
     return acc
   }, {})
   const expected: Record<string, number> = {
-    template: 43, scaffolding: 23, foundation: 22, crane: 27, demolition: 20, underground: 20,
+    template: 43, scaffolding: 33, foundation: 23, crane: 27, demolition: 20, underground: 20,
     "curtain-wall": 17, pile: 12, "steel-structure": 22, underwater: 8,
     "prefabricated-concrete": 18, "new-technology": 8, "limited-space": 14,
     general: 85,
   }
-  const okTotal = clauses.length === 339
+  const okTotal = clauses.length === 350
   const okProfessions = Object.keys(expected).every((p) => byProfession[p] === expected[p])
   const ok = okTotal && okProfessions
   const detail = Object.keys(expected)
     .map((p) => `${p} ${byProfession[p] ?? 0}/${expected[p]}`)
     .join(" | ")
-  console.log(`\n${ok ? "✅" : "❌"} 共 ${clauses.length} 条（预期 339）| ${detail}\n`)
+  console.log(`\n${ok ? "✅" : "❌"} 共 ${clauses.length} 条（预期 350）| ${detail}\n`)
   process.exit(ok ? 0 : 1)
 }
 

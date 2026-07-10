@@ -890,7 +890,66 @@ export async function parsePDF(buffer: Buffer, onProgress?: ProgressCallback): P
 }
 
 /**
- * 解析 DOCX 文件
+ * 嗅探 Office 文件真实格式（按文件头魔数，不依赖后缀）。
+ * - OLE/CFBF（老式 .doc/.xls/.ppt）：D0 CF 11 E0 A1 B1 1A E1
+ * - ZIP（.docx/.xlsx/.pptx，本质是 OOXML 压缩包）：50 4B 03 04
+ * 这样即便用户把 .docx 改名成 .doc（或反之），也能正确路由到对应解析器。
+ */
+function sniffOfficeFormat(buffer: Buffer): "ole" | "zip" | "unknown" {
+  if (!buffer || buffer.length < 8) return "unknown"
+  // OLE2 复合文档签名
+  if (
+    buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 &&
+    buffer[3] === 0xe0 && buffer[4] === 0xa1 && buffer[5] === 0xb1 &&
+    buffer[6] === 0x1a && buffer[7] === 0xe1
+  ) {
+    return "ole"
+  }
+  // ZIP 签名（PK\x03\x04）
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04) {
+    return "zip"
+  }
+  return "unknown"
+}
+
+/**
+ * 解析老式 DOC 文件（Word 97-2003，OLE/CFBF 二进制格式）。
+ * mammoth 只支持 .docx（OOXML/zip），遇到 .doc 会报
+ * "Can't find end of central directory"，因此老式 .doc 必须走 word-extractor。
+ */
+async function parseDOC(buffer: Buffer): Promise<string> {
+  const WordExtractor = (await import("word-extractor")).default
+  const extractor = new WordExtractor()
+
+  try {
+    const doc = await extractor.extract(buffer)
+    const parts: string[] = []
+    // 正文
+    const body = doc.getBody ? doc.getBody() : ""
+    if (body) parts.push(body)
+    // 页眉页脚里有时也有关键技术参数，一并带上
+    try {
+      const headers = doc.getHeaders ? doc.getHeaders() : ""
+      if (headers) parts.push(headers)
+    } catch {
+      /* 部分文档没有页眉，忽略 */
+    }
+
+    const text = parts.join("\n").trim()
+    if (!text) {
+      throw new Error("DOC 文件内容为空（可能是扫描件，需要 OCR）")
+    }
+
+    console.log(`DOC 解析完成: ${text.length} 字符`)
+    return text
+  } catch (error) {
+    console.error("DOC 解析失败:", error)
+    throw new Error(`DOC 文件解析失败: ${error instanceof Error ? error.message : "未知错误"}`)
+  }
+}
+
+/**
+ * 解析 DOCX 文件（OOXML/zip 格式）
  */
 async function parseDOCX(buffer: Buffer): Promise<string> {
   const mammoth = await import("mammoth")
@@ -926,9 +985,30 @@ export async function parseUploadedFile(
       return parsePDF(buffer, onProgress)
 
     case "docx":
-    case "doc":
-      onProgress?.({ stage: "docx_parse", message: "正在解析 DOCX 文件..." })
-      return parseDOCX(buffer)
+    case "doc": {
+      // 后缀不可全信（常见：.docx 被改名成 .doc，或反之）。
+      // 按文件头魔数判断真实格式，路由到对应解析器：
+      //   - zip（OOXML）→ mammoth（原 .docx 解析）
+      //   - ole（CFBF） → word-extractor（老式 .doc）
+      const realFmt = sniffOfficeFormat(buffer)
+      if (realFmt === "ole") {
+        onProgress?.({ stage: "doc_parse", message: "正在解析 DOC 文件（老式二进制格式）..." })
+        return parseDOC(buffer)
+      }
+      if (realFmt === "zip") {
+        onProgress?.({ stage: "docx_parse", message: "正在解析 DOCX 文件..." })
+        return parseDOCX(buffer)
+      }
+      // 魔数都匹配不上：按后缀兜底，给出明确报错而非 jszip 的晦涩信息
+      if (ext === "doc") {
+        throw new Error(
+          "无法识别的 DOC 文件格式（既不是标准 .doc 也不是 .docx）。请用 Word/WPS 打开后另存为 .docx 再上传。"
+        )
+      }
+      throw new Error(
+        "无法识别的 DOCX 文件格式（文件可能已损坏）。请用 Word/WPS 打开后另存为 .docx 再上传。"
+      )
+    }
 
     case "txt":
     case "md":

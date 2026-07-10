@@ -306,7 +306,7 @@ const STRUCTURE_TYPE_KEYWORDS: {
   { type: "门式", profession: "template", keywords: ["门式钢管脚手架", "门式脚手架", "门式支撑架"] },
   // ── 脚手架专业：架体形式轴 ──
   { type: "落地式脚手架", profession: "scaffolding", keywords: ["落地式脚手架", "落地作业脚手架", "落地式双排", "落地式单排", "落地式钢管脚手架"] },
-  { type: "悬挑式脚手架", profession: "scaffolding", keywords: ["悬挑式脚手架", "型钢悬挑脚手架", "悬挑脚手架", "型钢悬挑", "悬挑钢梁"] },
+  { type: "悬挑式脚手架", profession: "scaffolding", keywords: ["悬挑式脚手架", "型钢悬挑脚手架", "悬挑脚手架", "型钢悬挑", "悬挑钢梁", "悬挑外架", "悬挑外脚手架", "悬挑式外脚手架", "拉杆式悬挑外架"] },
   { type: "附着升降式脚手架", profession: "scaffolding", keywords: ["附着式升降脚手架", "附着升降脚手架", "爬架", "升降脚手架", "附着升降作业平台"] },
   { type: "吊篮", profession: "scaffolding", keywords: ["高处作业吊篮", "电动吊篮", "悬挂式脚手架", "吊篮平台"] },
   { type: "卸料平台", profession: "scaffolding", keywords: ["卸料平台", "卸料", "转料平台", "接料平台"] },
@@ -357,6 +357,10 @@ const MATERIAL_KEYWORDS = [
   "支护结构", "支撑", "腰梁", "锚杆", "土钉", "喷射混凝土", "灌注桩", "护壁", "扩底", "井圈",
   // 起重吊装扩展
   "塔式起重机", "施工升降机", "物料提升机", "钢丝绳", "吊钩", "力矩限制器", "防坠安全器",
+  // 脚手架/卸料平台扩展
+  "型钢", "悬挑梁", "悬挑钢梁", "U形拉环", "锚固螺栓", "固定段", "连墙件", "刚性连墙件",
+  "卸料平台", "操作平台", "悬挑式操作平台", "脚手板", "安全网", "限载牌", "吊环", "卡环",
+  "钢丝绳夹", "主体结构", "搁置点", "拉结点", "支撑点", "预埋件", "安全系数",
   // 幕墙扩展
   "硅酮结构密封胶", "铝型材", "立柱", "横梁", "后加锚栓", "钢化玻璃", "花岗石",
   // 钢结构扩展
@@ -738,4 +742,3 @@ export function shouldUseChunkedReview(
 // （老路径已废除）extractSimplifiedKnowledgeContext + extractChunkKeywords 已移除：
 //   分块流程不再按文件夹加载整本 .md，改由 Hook3（assignClausesToChunks）把精准锚点按主题分到各块 +
 //   汇总时用全局 anchorClauses（含强标通用）。
-
