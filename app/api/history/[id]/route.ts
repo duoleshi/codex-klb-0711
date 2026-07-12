@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getReviewRecordById, getReviewRecordByIdFromSqlite } from "@/lib/db"
+import { getReviewRecord } from "@/lib/storage/review-repository-factory"
 import { getCurrentUserId } from "@/lib/supabase/server"
 
 // 处理 CORS
@@ -31,15 +31,7 @@ export async function GET(
       )
     }
 
-    let record
-
-    if (userId) {
-      // 已登录用户：从 Supabase 获取
-      record = await getReviewRecordById(recordId, userId)
-    } else {
-      // 未登录用户：从 Sqlite 获取
-      record = await getReviewRecordByIdFromSqlite(recordId)
-    }
+    const record = await getReviewRecord(userId, recordId)
 
     if (!record) {
       return NextResponse.json(

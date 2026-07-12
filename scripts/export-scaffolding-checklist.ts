@@ -7,6 +7,7 @@
 // GB 55023、JGJ 80 等规范锚点，并由 getClausesByFeatures 按 profession=scaffolding 调度。
 
 import { getAllClauses, type Clause } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 import fs from "fs"
 import path from "path"
 
@@ -142,7 +143,7 @@ async function main() {
     for (const c of clauses) {
       idx++
       const item = c.clause_title.replace(/\|/g, "/")
-      const ref = `${c.standard_code} 第${c.clause_no}条`
+      const ref = formatClauseReference(c)
       const point = firstSentence(c.audit_points).replace(/\|/g, "/")
       const err = (COMMON_ERROR_OVERRIDES[`${c.standard_code}|${c.clause_no}`] || extractCommonError(c.audit_points) || "—").replace(/\|/g, "/")
       lines.push(`| ${idx} | ${item} | ${ref} | ${point} | ${err} |`)

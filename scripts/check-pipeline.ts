@@ -7,6 +7,7 @@
 
 import { identifySchemeFeatures } from "../lib/knowledge-base"
 import { getClausesByFeatures } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 
 const SEP = "═".repeat(70)
 
@@ -39,7 +40,7 @@ async function main() {
     ? clauses
         .map(
           (c) =>
-            `【${c.standard_code} 第${c.clause_no}条 ${c.clause_title}】\n` +
+            `【${formatClauseReference(c)} ${c.clause_title}】\n` +
             `原文：${c.clause_text}\n` +
             `审核要点：${c.audit_points ?? ""}\n` +
             `（匹配依据：${c.matchedBy.join("、")}）`

@@ -36,6 +36,12 @@ export function Footer() {
             >
               法规库
             </Link>
+            <Link
+              href="/pricing"
+              className="transition-colors hover:text-foreground"
+            >
+              价格
+            </Link>
           </div>
 
           {/* Copyright */}

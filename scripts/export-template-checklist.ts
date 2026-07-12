@@ -6,6 +6,7 @@
 // 老师第三件：把跑通的锚点库导出成可交付的审核检查表（审核项/规范/审核要点/常见错误）。
 
 import { getAllClauses, type Clause } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 import fs from "fs"
 import path from "path"
 
@@ -76,7 +77,7 @@ async function main() {
     for (const c of clauses) {
       idx++
       const item = c.clause_title.replace(/\|/g, "/")
-      const ref = `${c.standard_code} 第${c.clause_no}条`
+      const ref = formatClauseReference(c)
       const point = firstSentence(c.audit_points)
       const err = extractCommonError(c.audit_points) || "—"
       lines.push(`| ${idx} | ${item} | ${ref} | ${point} | ${err} |`)

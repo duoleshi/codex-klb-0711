@@ -5,6 +5,7 @@
 // 验证通过后可保留（后续 Step 1 会扩展为匹配测试），或删除。
 
 import { getAllClauses } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 
 async function main() {
   const clauses = await getAllClauses()
@@ -19,7 +20,7 @@ async function main() {
   }
 
   for (const c of clauses) {
-    console.log(`【${c.id}】${c.standard_code} 第 ${c.clause_no} 条 — ${c.clause_title}`)
+    console.log(`【${c.id}】${formatClauseReference(c)} — ${c.clause_title}`)
     console.log(`     专业: ${c.profession} | 构造: ${c.structure_type ?? "—"} | 危大: ${c.hazard_level ?? "不限"} | 优先级: ${c.priority}`)
     console.log(`     触发材料: ${c.trigger_materials ?? "—"}`)
     console.log(`     触发工艺: ${c.trigger_processes ?? "—"}`)

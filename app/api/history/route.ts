@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import {
-  getReviewRecords,
-  deleteReviewRecord,
-  getReviewRecordsFromSqlite,
-  deleteReviewRecordFromSqlite,
-} from "@/lib/db"
+import { deleteReviewRecordById, listReviewRecords } from "@/lib/storage/review-repository-factory"
 import { getCurrentUserId } from "@/lib/supabase/server"
 
 // 处理 CORS
@@ -30,25 +25,10 @@ export async function GET(request: NextRequest) {
     const professionType = searchParams.get("professionType") || undefined
     const keyword = searchParams.get("keyword") || undefined
 
-    let records, total
-
-    if (userId) {
-      // 已登录用户：从 Supabase 获取
-      const result = await getReviewRecords(userId, page, pageSize, {
-        professionType,
-        keyword,
-      })
-      records = result.records
-      total = result.total
-    } else {
-      // 未登录用户：从 Sqlite 获取
-      const result = await getReviewRecordsFromSqlite(page, pageSize, {
-        professionType,
-        keyword,
-      })
-      records = result.records
-      total = result.total
-    }
+    const { records, total } = await listReviewRecords(userId, page, pageSize, {
+      professionType,
+      keyword,
+    })
 
     // 计算总页数
     const totalPages = Math.ceil(total / pageSize)
@@ -88,13 +68,7 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    if (userId) {
-      // 已登录用户：从 Supabase 删除
-      await deleteReviewRecord(id, userId)
-    } else {
-      // 未登录用户：从 Sqlite 删除
-      await deleteReviewRecordFromSqlite(id)
-    }
+    await deleteReviewRecordById(userId, id)
 
     return NextResponse.json({
       success: true,

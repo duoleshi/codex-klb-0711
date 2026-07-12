@@ -1,4 +1,5 @@
 import { getAllClauses, type Clause } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 import fs from "fs"
 import path from "path"
 
@@ -53,7 +54,7 @@ function renderTableRows(clauses: Clause[], startIndex: number): { rows: string[
   for (const c of clauses) {
     idx++
     const item = c.clause_title.replace(/\|/g, "/")
-    const ref = `${c.standard_code} 第${c.clause_no}条`
+    const ref = formatClauseReference(c)
     const point = firstSentence(c.audit_points).replace(/\|/g, "/")
     const err = extractCommonError(c.audit_points).replace(/\|/g, "/")
     rows.push(`| ${idx} | ${item} | ${ref} | ${point} | ${err} |`)

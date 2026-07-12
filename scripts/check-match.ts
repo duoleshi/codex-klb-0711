@@ -2,9 +2,14 @@
 // 构造隔离验证：轮扣/盘扣/扣件/碗扣 各只捞自己的条款，不互窜
 // 运行：npx tsx scripts/check-match.ts
 
-import { getClausesByFeatures, type SchemeFeatures } from "../lib/clause-db"
+import { getClausesByFeatures, type Clause, type SchemeFeatures } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 
 const SEP = "═".repeat(70)
+
+function clauseLabel(clause: Clause): string {
+  return formatClauseReference(clause)
+}
 
 async function runCase(
   name: string,
@@ -21,7 +26,7 @@ async function runCase(
   console.log(`命中 ${m.length} 条 = 构造专属 ${constructorClauses.length} + 通用 ${genericClauses.length}`)
   for (const c of m) {
     const tag = c.structure_type ? `[${c.structure_type}]` : "[通用]"
-    console.log(`  • ${c.standard_code} 第${c.clause_no}条 《${c.clause_title}》 ${tag}`)
+    console.log(`  • ${clauseLabel(c)} 《${c.clause_title}》 ${tag}`)
   }
   // 断言：构造专属条数 = expectCount，且都属 expectStandard（通用条额外，不违反隔离）
   let ok = constructorClauses.length === expectCount
@@ -44,7 +49,7 @@ async function runCaseByProfession(
   console.log(`\n${SEP}\n${name}\n${SEP}`)
   console.log(`命中 ${m.length} 条，其中 ${expectProfession} 专业 ${own.length} 条（预期 ≥${expectMinCount}）`)
   for (const c of own.slice(0, 6)) {
-    console.log(`  • ${c.standard_code} 第${c.clause_no}条 《${c.clause_title}》`)
+    console.log(`  • ${clauseLabel(c)} 《${c.clause_title}》`)
   }
   if (own.length > 6) console.log(`  …另 ${own.length - 6} 条`)
   const ok = own.length >= expectMinCount
@@ -68,7 +73,7 @@ async function runCaseLocked(
   console.log(`命中 ${m.length} 条（应属 ${lockedProfession} + 强标 general），外专业泄漏 ${foreign.length} 条，含强标 ${hasGeneral ? "✓" : "✗"}`)
   if (foreign.length > 0) {
     for (const c of foreign.slice(0, 5)) {
-      console.log(`  ⚠️ 泄漏 ${c.profession}: ${c.standard_code} 第${c.clause_no}条`)
+      console.log(`  ⚠️ 泄漏 ${c.profession}: ${clauseLabel(c)}`)
     }
   }
   const ok = m.length >= expectMinCount && foreign.length === 0 && hasGeneral
@@ -102,7 +107,7 @@ async function runCaseScaffoldingGeneric(
   console.log(`\n${SEP}\n${name}\n${SEP}`)
   console.log(`命中 ${m.length} 条，其中脚手架通用条款 ${scaffoldingGeneric.length} 条（预期 ${expectCount}）`)
   for (const c of scaffoldingGeneric) {
-    console.log(`  • ${c.standard_code} 第${c.clause_no}条 《${c.clause_title}》`)
+    console.log(`  • ${clauseLabel(c)} 《${c.clause_title}》`)
   }
   const ok = scaffoldingGeneric.length === expectCount
   console.log(`${ok ? "✅" : "❌"} ${ok ? "通过" : "未通过"}`)
@@ -146,7 +151,7 @@ async function runCaseNoForeignUnlocked(
   console.log(`命中 ${m.length} 条（主专业 ${mainProfession} + 强标 general），外专业泄漏 ${foreign.length} 条，含强标 ${hasGeneral ? "✓" : "✗"}`)
   if (foreign.length > 0) {
     for (const c of foreign.slice(0, 5)) {
-      console.log(`  ⚠️ 泄漏 ${c.profession}: ${c.standard_code} 第${c.clause_no}条`)
+      console.log(`  ⚠️ 泄漏 ${c.profession}: ${clauseLabel(c)}`)
     }
   }
   const ok = foreign.length === 0 && hasGeneral && m.length >= expectMinCount

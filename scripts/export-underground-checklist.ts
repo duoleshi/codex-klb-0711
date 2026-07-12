@@ -4,6 +4,7 @@
 // 产出：docs/暗挖工程审核清单.md
 
 import { getAllClauses, type Clause } from "../lib/clause-db"
+import { formatClauseReference } from "../lib/clauses/clause-reference"
 import fs from "fs"
 import path from "path"
 
@@ -120,7 +121,7 @@ async function main() {
       idx++
       const key = `${c.standard_code}|${c.clause_no}`
       const item = c.clause_title.replace(/\|/g, "/")
-      const ref = `${c.standard_code} 第${c.clause_no}条`
+      const ref = formatClauseReference(c)
       const point = firstSentence(c.audit_points).replace(/\|/g, "/")
       const err = (COMMON_ERROR_OVERRIDES[key] || extractCommonError(c.audit_points) || "—").replace(/\|/g, "/")
       lines.push(`| ${idx} | ${item} | ${ref} | ${point} | ${err} |`)
