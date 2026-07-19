@@ -28,7 +28,7 @@ import {
 import { Header, Footer } from "@/components/landing"
 
 interface ReviewRecord {
-  id: number
+  id: string
   filename: string
   file_size: number | null
   profession_types: string | null
@@ -114,7 +114,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [keyword, setKeyword] = useState("")
   const [professionType, setProfessionType] = useState("all")
-  const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   // 获取历史记录
   const fetchRecords = useCallback(async () => {

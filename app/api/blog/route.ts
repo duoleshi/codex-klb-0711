@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
+function isMissingBlogsTable(error: { code?: string; message?: string } | null | undefined): boolean {
+  return error?.code === "PGRST205" || Boolean(error?.message?.includes("public.blogs"))
+}
+
 export async function GET(request: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -23,6 +27,10 @@ export async function GET(request: Request) {
         .eq("id", id)
         .single()
 
+      if (isMissingBlogsTable(error)) {
+        return NextResponse.json({ success: false, error: "博客不存在" }, { status: 404 })
+      }
+
       if (error || !data) {
         return NextResponse.json({ success: false, error: "博客不存在" }, { status: 404 })
       }
@@ -36,7 +44,11 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
 
     if (error) {
-      console.error("Supabase 查询错误:", error)
+      if (isMissingBlogsTable(error)) {
+        return NextResponse.json({ success: true, data: [] })
+      }
+
+      console.error("博客查询错误:", error)
       return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 

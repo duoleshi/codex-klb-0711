@@ -18,6 +18,10 @@ export async function OPTIONS() {
 export async function GET(request: NextRequest) {
   try {
     const userId = await getCurrentUserId()
+    if (!userId) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     const page = parseInt(searchParams.get("page") || "1", 10)
@@ -58,8 +62,12 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const userId = await getCurrentUserId()
+    if (!userId) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const id = parseInt(searchParams.get("id") || "0", 10)
+    const id = searchParams.get("id")
 
     if (!id) {
       return NextResponse.json(

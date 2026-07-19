@@ -15,10 +15,10 @@ export function createSqliteReviewRepository(): ReviewRepository {
     list(page = 1, pageSize = 10, filters?: { professionType?: string; keyword?: string }) {
       return getReviewRecordsFromSqlite(page, pageSize, filters)
     },
-    getById(id: number) {
+    getById(id: string) {
       return getReviewRecordByIdFromSqlite(id)
     },
-    delete(id: number) {
+    delete(id: string) {
       return deleteReviewRecordFromSqlite(id)
     },
   }

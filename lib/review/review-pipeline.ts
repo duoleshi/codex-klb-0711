@@ -14,6 +14,7 @@ import { mergeChunkReports } from "./report-merger"
 import { extractConclusion } from "./report-summary"
 import { mergeStageReports, runCompletenessReviewStage, runTechnicalReviewStage } from "./stage-reviewer"
 import type { RunReviewPipelineInput } from "./review-types"
+import { uploadReviewFile } from "@/lib/storage/review-file-storage"
 
 function currentChineseDate(): string {
   return new Date().toLocaleDateString("zh-CN", {
@@ -25,6 +26,27 @@ function currentChineseDate(): string {
 
 function professionNamesFromTypes(professionTypes: { name: string }[]): string {
   return professionTypes.length > 0 ? professionTypes.map((p) => p.name).join("、") : "通用工程"
+}
+
+async function tryUploadOriginalFile(input: {
+  userId: string | null
+  filename: string
+  fileBuffer: Buffer
+  contentType?: string
+}): Promise<string | undefined> {
+  if (!input.userId) return undefined
+
+  try {
+    return await uploadReviewFile({
+      userId: input.userId,
+      filename: input.filename,
+      buffer: input.fileBuffer,
+      contentType: input.contentType,
+    })
+  } catch (error) {
+    console.error("上传审核原始文件失败:", error)
+    return undefined
+  }
 }
 
 export async function runReviewPipeline(input: RunReviewPipelineInput): Promise<void> {
@@ -154,8 +176,16 @@ export async function runReviewPipeline(input: RunReviewPipelineInput): Promise<
   const reviewConclusion = extractConclusion(reviewResult)
 
   try {
+    const filePath = await tryUploadOriginalFile({
+      userId,
+      filename: file.name,
+      fileBuffer,
+      contentType: file.type,
+    })
+
     await saveReviewWithFallback(userId, {
       filename: file.name,
+      file_path: filePath,
       file_size: file.size,
       profession_types: professionTypes.length > 0 ? professionTypes.map((p) => p.name) : [professionNames],
       document_content: documentContent.slice(0, 10000),
@@ -268,8 +298,16 @@ async function runChunkedReview(input: {
     const reviewConclusion = extractConclusion(finalResult)
 
     try {
+      const filePath = await tryUploadOriginalFile({
+        userId,
+        filename: file.name,
+        fileBuffer: Buffer.from(await file.arrayBuffer()),
+        contentType: file.type,
+      })
+
       await saveReviewWithFallback(userId, {
         filename: file.name,
+        file_path: filePath,
         file_size: file.size,
         profession_types: professionTypes.map((p) => p.name),
         document_content: documentContent.slice(0, 10000),

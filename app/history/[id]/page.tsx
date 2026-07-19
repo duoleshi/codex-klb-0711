@@ -31,7 +31,7 @@ import { Header, Footer } from "@/components/landing"
 import { marked } from "marked"
 
 interface ReviewRecord {
-  id: number
+  id: string
   filename: string
   file_size: number | null
   profession_types: string | null

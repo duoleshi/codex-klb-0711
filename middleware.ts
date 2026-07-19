@@ -70,6 +70,6 @@ export const config = {
      * - _next/image (图片优化)
      * - favicon.ico (网站图标)
      */
-    "/((?!_next/static|_next/image|favicon.ico).*!)",
+    "/((?!api|_next/static|_next/image|favicon.ico|wasm|.*\\..*).*)",
   ],
 }

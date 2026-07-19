@@ -22,6 +22,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { normalizeReviewMarkdown } from "@/lib/review/report-markdown"
+import { buildPrintableReportHtml } from "@/lib/review/report-export"
+import { buildExcelReportBlob } from "@/lib/review/report-excel-export"
+import { buildWordReportBlob } from "@/lib/review/report-word-export"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,38 +163,6 @@ function parseCompletenessAuditTable(markdown: string): CompletenessAuditRow[] {
   }
 
   return rows
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-}
-
-function buildReportHtml(content: string, title = "审核报告"): string {
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title><style>
-    body{font-family:"Microsoft YaHei",SimSun,sans-serif;padding:28px;color:#111827;line-height:1.75}
-    h1{font-size:22px;margin:0 0 18px;font-weight:700}
-    pre{white-space:pre-wrap;word-break:break-word;font-family:"Microsoft YaHei",SimSun,sans-serif;font-size:13px}
-    @media print{body{padding:0}pre{font-size:12px}}
-  </style></head><body><pre>${escapeHtml(content)}</pre></body></html>`
-}
-
-function buildReportExcelHtml(sections: Section[]): string {
-  const body = sections
-    .map((section, index) => {
-      const title = section.title || (index === 0 ? "报告头部" : `章节${index + 1}`)
-      return `<tr><td>${index + 1}</td><td>${escapeHtml(title)}</td><td>${escapeHtml(section.content)}</td></tr>`
-    })
-    .join("")
-
-  return `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><style>
-    table{width:100%;border-collapse:collapse;font-family:"Microsoft YaHei",SimSun,sans-serif;font-size:12px}
-    th,td{border:1px solid #999;padding:8px;text-align:left;vertical-align:top;white-space:pre-wrap}
-    th{background:#f3f4f6}
-  </style></head><body><table><thead><tr><th>序号</th><th>章节</th><th>内容</th></tr></thead><tbody>${body}</tbody></table></body></html>`
 }
 
 function reportFilename(extension: string): string {
@@ -496,23 +467,27 @@ export function ReviewResult({ content: initialContent }: ReviewResultProps) {
       alert("请允许弹出窗口以导出 PDF")
       return
     }
-    printWindow.document.write(buildReportHtml(currentContent))
+    printWindow.document.write(buildPrintableReportHtml(currentContent))
     printWindow.document.close()
     printWindow.onload = () => setTimeout(() => printWindow.print(), 200)
   }
 
-  const handleDownloadExcel = () => {
-    downloadBlob(
-      reportFilename("xls"),
-      new Blob(["\ufeff" + buildReportExcelHtml(sections)], { type: "application/vnd.ms-excel;charset=utf-8" })
-    )
+  const handleDownloadExcel = async () => {
+    try {
+      downloadBlob(reportFilename("xlsx"), await buildExcelReportBlob(currentContent))
+    } catch (error) {
+      console.error("Excel 导出失败:", error)
+      alert("Excel 导出失败，请稍后重试")
+    }
   }
 
-  const handleDownloadWord = () => {
-    downloadBlob(
-      reportFilename("doc"),
-      new Blob(["\ufeff" + buildReportHtml(currentContent)], { type: "application/msword;charset=utf-8" })
-    )
+  const handleDownloadWord = async () => {
+    try {
+      downloadBlob(reportFilename("docx"), await buildWordReportBlob(currentContent))
+    } catch (error) {
+      console.error("Word 导出失败:", error)
+      alert("Word 导出失败，请稍后重试")
+    }
   }
 
   const handleEdit = (section: Section) => {

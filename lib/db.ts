@@ -2,10 +2,12 @@ import { createClient } from "@supabase/supabase-js"
 import initSqlJs from "sql.js"
 import fs from "fs"
 import path from "path"
+import { extractConclusion } from "./review/report-summary"
+import { getFilenameFromStoragePath } from "./storage/review-file-storage"
 
-// Supabase 客户端（使用 service role key 绕过 RLS，仅在 API 路由中使用）
+// Supabase 服务端客户端（仅在 API 路由中使用；按 user_id 过滤数据）
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 // Sqlite 数据库路径
@@ -55,9 +57,16 @@ function saveSqliteDb(db: initSqlJs.Database) {
   fs.writeFileSync(SQLITE_DB_PATH, buffer)
 }
 
+function serializeProfessionTypes(value: unknown): string | null {
+  if (!value) return null
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) return JSON.stringify(value)
+  return JSON.stringify(value)
+}
+
 // 审核记录接口
 export interface ReviewRecord {
-  id: number
+  id: string
   filename: string
   file_size: number | null
   profession_types: string | null
@@ -74,6 +83,7 @@ export interface ReviewRecord {
 // 创建审核记录的输入接口
 export interface CreateReviewInput {
   filename: string
+  file_path?: string
   file_size?: number
   profession_types?: string[]
   document_content?: string
@@ -88,20 +98,17 @@ export interface CreateReviewInput {
 /**
  * 保存审核记录
  */
-export async function saveReviewRecord(input: CreateReviewInput): Promise<number> {
+export async function saveReviewRecord(input: CreateReviewInput): Promise<string> {
   // 先清理旧记录
   await cleanupOldRecords(input.userId)
 
   const { data, error } = await supabase
     .from("review_records")
     .insert({
-      filename: input.filename,
-      file_size: input.file_size || null,
-      profession_types: input.profession_types ? JSON.stringify(input.profession_types) : null,
-      document_content: input.document_content || null,
-      review_result: input.review_result,
-      review_conclusion: input.review_conclusion || null,
-      knowledge_file: input.knowledge_file || null,
+      file_path: input.file_path || input.filename,
+      professional_type: input.profession_types?.join("、") || "通用工程",
+      report_content: input.review_result,
+      status: "completed",
       tokens_used: input.tokens_used || null,
       model: input.model || null,
       user_id: input.userId,
@@ -114,7 +121,7 @@ export async function saveReviewRecord(input: CreateReviewInput): Promise<number
     throw new Error("保存审核记录失败: " + error.message)
   }
 
-  return data.id
+  return String(data.id)
 }
 
 /**
@@ -138,11 +145,11 @@ export async function getReviewRecords(
     .eq("user_id", userId)
 
   if (filters?.professionType) {
-    query = query.like("profession_types", `%"${filters.professionType}"%`)
+    query = query.ilike("professional_type", `%${filters.professionType}%`)
   }
 
   if (filters?.keyword) {
-    query = query.like("filename", `%${filters.keyword}%`)
+    query = query.ilike("file_path", `%${filters.keyword}%`)
   }
 
   // 获取数据（带分页）
@@ -156,14 +163,14 @@ export async function getReviewRecords(
   }
 
   const records: ReviewRecord[] = (data || []).map((row: Record<string, unknown>) => ({
-    id: row.id as number,
-    filename: row.filename as string,
-    file_size: row.file_size as number | null,
-    profession_types: row.profession_types as string | null,
-    document_content: row.document_content as string | null,
-    review_result: row.review_result as string,
-    review_conclusion: row.review_conclusion as string | null,
-    knowledge_file: row.knowledge_file as string | null,
+    id: String(row.id),
+    filename: getFilenameFromStoragePath(row.file_path as string | null),
+    file_size: null,
+    profession_types: serializeProfessionTypes(row.professional_type ? [row.professional_type] : null),
+    document_content: null,
+    review_result: (row.report_content as string | null) || "",
+    review_conclusion: extractConclusion((row.report_content as string | null) || ""),
+    knowledge_file: null,
     tokens_used: row.tokens_used as number | null,
     model: row.model as string | null,
     user_id: row.user_id as string | null,
@@ -176,7 +183,7 @@ export async function getReviewRecords(
 /**
  * 获取单条审核记录
  */
-export async function getReviewRecordById(id: number, userId: string): Promise<ReviewRecord | null> {
+export async function getReviewRecordById(id: string, userId: string): Promise<ReviewRecord | null> {
   const { data, error } = await supabase
     .from("review_records")
     .select("*")
@@ -189,14 +196,14 @@ export async function getReviewRecordById(id: number, userId: string): Promise<R
   }
 
   return {
-    id: data.id as number,
-    filename: data.filename as string,
-    file_size: data.file_size as number | null,
-    profession_types: data.profession_types as string | null,
-    document_content: data.document_content as string | null,
-    review_result: data.review_result as string,
-    review_conclusion: data.review_conclusion as string | null,
-    knowledge_file: data.knowledge_file as string | null,
+    id: String(data.id),
+    filename: getFilenameFromStoragePath(data.file_path as string | null),
+    file_size: null,
+    profession_types: serializeProfessionTypes(data.professional_type ? [data.professional_type] : null),
+    document_content: null,
+    review_result: (data.report_content as string | null) || "",
+    review_conclusion: extractConclusion((data.report_content as string | null) || ""),
+    knowledge_file: null,
     tokens_used: data.tokens_used as number | null,
     model: data.model as string | null,
     user_id: data.user_id as string | null,
@@ -207,7 +214,7 @@ export async function getReviewRecordById(id: number, userId: string): Promise<R
 /**
  * 删除审核记录
  */
-export async function deleteReviewRecord(id: number, userId: string): Promise<boolean> {
+export async function deleteReviewRecord(id: string, userId: string): Promise<boolean> {
   const { error } = await supabase
     .from("review_records")
     .delete()
@@ -226,44 +233,11 @@ export async function deleteReviewRecord(id: number, userId: string): Promise<bo
  * 清理旧记录（保留最新100条，删除30天前的记录）
  */
 export async function cleanupOldRecords(userId: string): Promise<void> {
-  // 获取当前用户记录数
-  const { count } = await supabase
-    .from("review_records")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-
-  const currentCount = count || 0
-
-  if (currentCount <= 100) {
-    // 删除30天前的记录
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    await supabase
-      .from("review_records")
-      .delete()
-      .eq("user_id", userId)
-      .lt("created_at", thirtyDaysAgo.toISOString())
-  } else {
-    // 只保留最新的100条
-    const { data } = await supabase
-      .from("review_records")
-      .select("id")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .range(99, 99)
-
-    if (data && data.length > 0) {
-      const thresholdId = data[0].id
-      await supabase
-        .from("review_records")
-        .delete()
-        .eq("user_id", userId)
-        .lt("id", thresholdId)
-    }
-  }
+  void userId
+  // 正式版审核记录默认不自动清理。后续做套餐和数据留存策略时再按 plan 控制。
 }
 
-export { extractConclusion } from "./review/report-summary"
+export { extractConclusion }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sqlite 相关函数（用于未登录用户）
@@ -272,7 +246,7 @@ export { extractConclusion } from "./review/report-summary"
 /**
  * 保存审核记录到 Sqlite（未登录用户）
  */
-export async function saveReviewRecordToSqlite(input: Omit<CreateReviewInput, "userId">): Promise<number> {
+export async function saveReviewRecordToSqlite(input: Omit<CreateReviewInput, "userId">): Promise<string> {
   const db = await getSqliteDb()
 
   const result = db.run(
@@ -291,7 +265,7 @@ export async function saveReviewRecordToSqlite(input: Omit<CreateReviewInput, "u
     ]
   )
 
-  const id = result.lastInsertRowId as number
+  const id = String(result.lastInsertRowId)
   saveSqliteDb(db)
   db.close()
 
@@ -343,13 +317,13 @@ export async function getReviewRecordsFromSqlite(
   const records: ReviewRecord[] = []
   if (dataResult.length > 0) {
     const columns = dataResult[0].columns
-    dataResult[0].values.forEach((row) => {
+    dataResult[0].values.forEach((row: unknown[]) => {
       const record: Record<string, unknown> = {}
-      columns.forEach((col, i) => {
+      columns.forEach((col: string, i: number) => {
         record[col] = row[i]
       })
       records.push({
-        id: record.id as number,
+        id: String(record.id),
         filename: record.filename as string,
         file_size: record.file_size as number | null,
         profession_types: record.profession_types as string | null,
@@ -372,14 +346,15 @@ export async function getReviewRecordsFromSqlite(
 /**
  * 从 Sqlite 获取单条审核记录（未登录用户）
  */
-export async function getReviewRecordByIdFromSqlite(id: number): Promise<ReviewRecord | null> {
+export async function getReviewRecordByIdFromSqlite(id: string): Promise<ReviewRecord | null> {
   const db = await getSqliteDb()
+  const numericId = Number(id)
 
   const result = db.exec(
     `SELECT id, filename, file_size, profession_types, document_content, review_result, review_conclusion, knowledge_file, tokens_used, model, created_at
      FROM review_records
      WHERE id = ?`,
-    [id]
+    [numericId]
   )
 
   db.close()
@@ -391,12 +366,12 @@ export async function getReviewRecordByIdFromSqlite(id: number): Promise<ReviewR
   const columns = result[0].columns
   const row = result[0].values[0]
   const record: Record<string, unknown> = {}
-  columns.forEach((col, i) => {
+  columns.forEach((col: string, i: number) => {
     record[col] = row[i]
   })
 
   return {
-    id: record.id as number,
+    id: String(record.id),
     filename: record.filename as string,
     file_size: record.file_size as number | null,
     profession_types: record.profession_types as string | null,
@@ -414,10 +389,11 @@ export async function getReviewRecordByIdFromSqlite(id: number): Promise<ReviewR
 /**
  * 从 Sqlite 删除审核记录（未登录用户）
  */
-export async function deleteReviewRecordFromSqlite(id: number): Promise<boolean> {
+export async function deleteReviewRecordFromSqlite(id: string): Promise<boolean> {
   const db = await getSqliteDb()
+  const numericId = Number(id)
 
-  db.run("DELETE FROM review_records WHERE id = ?", [id])
+  db.run("DELETE FROM review_records WHERE id = ?", [numericId])
   saveSqliteDb(db)
   db.close()
 

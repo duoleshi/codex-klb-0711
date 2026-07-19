@@ -31,6 +31,7 @@ export interface RunReviewPipelineInput extends ReviewProgressHandlers {
 
 export interface SaveReviewRecordData {
   filename: string
+  file_path?: string
   file_size: number
   profession_types: string[]
   document_content: string

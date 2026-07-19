@@ -21,17 +21,20 @@ export async function GET(
 ) {
   try {
     const userId = await getCurrentUserId()
-    const { id } = await params
-    const recordId = parseInt(id, 10)
+    if (!userId) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 })
+    }
 
-    if (isNaN(recordId)) {
+    const { id } = await params
+
+    if (!id) {
       return NextResponse.json(
         { error: "无效的记录ID" },
         { status: 400 }
       )
     }
 
-    const record = await getReviewRecord(userId, recordId)
+    const record = await getReviewRecord(userId, id)
 
     if (!record) {
       return NextResponse.json(

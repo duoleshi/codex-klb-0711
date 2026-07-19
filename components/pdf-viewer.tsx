@@ -46,7 +46,7 @@ export function PdfViewer({ open, onClose, fileUrl, fileName, onDownload }: PdfV
 
   // 设置 PDF.js worker
   useEffect(() => {
-    import("react-pdf").then((pdfjs) => {
+    import("react-pdf").then(({ pdfjs }) => {
       pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
       setWorkerReady(true)
     })

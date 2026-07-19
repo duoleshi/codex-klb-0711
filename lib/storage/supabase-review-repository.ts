@@ -10,10 +10,10 @@ export function createSupabaseReviewRepository(userId: string): ReviewRepository
     list(page = 1, pageSize = 10, filters?: { professionType?: string; keyword?: string }) {
       return getReviewRecords(userId, page, pageSize, filters)
     },
-    getById(id: number) {
+    getById(id: string) {
       return getReviewRecordById(id, userId)
     },
-    delete(id: number) {
+    delete(id: string) {
       return deleteReviewRecord(id, userId)
     },
   }
